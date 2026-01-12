@@ -54,6 +54,68 @@ CONTEXT7_TOOLS = [
     "mcp__context7__query-docs",
 ]
 
+# Filesystem MCP tools for file operations
+# See: https://github.com/modelcontextprotocol/servers
+FILESYSTEM_TOOLS = [
+    "mcp__filesystem__read_file",
+    "mcp__filesystem__write_file",
+    "mcp__filesystem__list_directory",
+    "mcp__filesystem__create_directory",
+    "mcp__filesystem__move_file",
+    "mcp__filesystem__search_files",
+    "mcp__filesystem__get_file_info",
+]
+
+# GitHub MCP tools for version control and collaboration
+# See: https://github.com/modelcontextprotocol/servers
+GITHUB_TOOLS = [
+    "mcp__github__create_or_update_file",
+    "mcp__github__search_repositories",
+    "mcp__github__create_repository",
+    "mcp__github__get_file_contents",
+    "mcp__github__push_files",
+    "mcp__github__create_issue",
+    "mcp__github__create_pull_request",
+    "mcp__github__fork_repository",
+    "mcp__github__create_branch",
+]
+
+# Git MCP tools for local version control
+# See: https://github.com/modelcontextprotocol/servers
+GIT_TOOLS = [
+    "mcp__git__status",
+    "mcp__git__diff",
+    "mcp__git__commit",
+    "mcp__git__add",
+    "mcp__git__log",
+    "mcp__git__show",
+]
+
+# Memory MCP tools for knowledge graph-based memory
+# See: https://github.com/modelcontextprotocol/servers
+MEMORY_TOOLS = [
+    "mcp__memory__create_entities",
+    "mcp__memory__create_relations",
+    "mcp__memory__search_nodes",
+    "mcp__memory__open_nodes",
+    "mcp__memory__delete_entities",
+    "mcp__memory__delete_relations",
+]
+
+# Sequential Thinking MCP tools for dynamic problem-solving
+# See: https://github.com/modelcontextprotocol/servers
+SEQUENTIAL_THINKING_TOOLS = [
+    "mcp__sequential_thinking__start_sequence",
+    "mcp__sequential_thinking__continue_sequence",
+    "mcp__sequential_thinking__get_sequence",
+]
+
+# Fetch MCP tools for web content retrieval
+# See: https://github.com/modelcontextprotocol/servers
+FETCH_TOOLS = [
+    "mcp__fetch__fetch",
+]
+
 # Built-in tools
 BUILTIN_TOOLS = [
     "Read",
@@ -110,6 +172,18 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
                 *PLAYWRIGHT_TOOLS,
                 # Allow Context7 MCP tools for documentation lookup
                 *CONTEXT7_TOOLS,
+                # Allow Filesystem MCP tools for file operations
+                *FILESYSTEM_TOOLS,
+                # Allow GitHub MCP tools for version control
+                *GITHUB_TOOLS,
+                # Allow Git MCP tools for local version control
+                *GIT_TOOLS,
+                # Allow Memory MCP tools for knowledge graph memory
+                *MEMORY_TOOLS,
+                # Allow Sequential Thinking MCP tools for problem-solving
+                *SEQUENTIAL_THINKING_TOOLS,
+                # Allow Fetch MCP tools for web content retrieval
+                *FETCH_TOOLS,
             ],
         },
     }
@@ -126,33 +200,101 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
     print("   - Sandbox enabled (OS-level bash isolation)")
     print(f"   - Filesystem restricted to: {project_dir.resolve()}")
     print("   - Bash commands restricted to allowlist (see security.py)")
-    print("   - MCP servers:")
+    print("   - MCP servers (8 total):")
     print("     • playwright (browser automation and testing)")
-    print("     • context7 (documentation lookup for best practices)")
+    print("     • context7 (documentation lookup)")
+    print("     • filesystem (file operations)")
+    print("     • github (version control and collaboration)")
+    print("     • git (local version control)")
+    print("     • memory (knowledge graph-based memory)")
+    print("     • sequential-thinking (dynamic problem-solving)")
+    print("     • fetch (web content retrieval)")
     print()
 
     # Get Context7 API key from environment
     context7_api_key = os.environ.get("CONTEXT7_API_KEY", "")
 
+    # Get GitHub token from environment (optional - GitHub MCP can use OAuth)
+    github_token = os.environ.get("GITHUB_TOKEN", "")
+
     return ClaudeSDKClient(
         options=ClaudeCodeOptions(
             model=model,
-            system_prompt="You are an expert full-stack developer building a production-quality web application. You track your work using a local checklist system, test your application using Playwright, and use Context7 to research best practices and documentation before implementing features.",
+            system_prompt="""You are an expert full-stack developer building production-quality applications with an advanced AI development platform.
+
+You have access to:
+- Local checklist system for task tracking
+- Playwright for browser automation and testing
+- Context7 for documentation lookup and best practices
+- Filesystem operations for file management
+- GitHub integration for version control and collaboration
+- Git for local version control operations
+- Knowledge graph memory for persistent learning
+- Sequential thinking for complex problem-solving
+- Web fetch for content retrieval
+
+Use these tools strategically to build high-quality software efficiently.""",
             allowed_tools=[
                 *BUILTIN_TOOLS,
                 *PLAYWRIGHT_TOOLS,
                 *CONTEXT7_TOOLS,
+                *FILESYSTEM_TOOLS,
+                *GITHUB_TOOLS,
+                *GIT_TOOLS,
+                *MEMORY_TOOLS,
+                *SEQUENTIAL_THINKING_TOOLS,
+                *FETCH_TOOLS,
             ],
             mcp_servers={
                 # Playwright MCP server for browser automation
                 # See: https://playwright.dev/docs/intro
-                "playwright": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-playwright"]},
+                "playwright": {
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-playwright"]
+                },
                 # Context7 MCP server for documentation lookup
                 # See: https://context7.com
                 "context7": {
                     "command": "npx",
                     "args": ["-y", "@context7/mcp-server"],
                     "env": {"CONTEXT7_API_KEY": context7_api_key}
+                },
+                # Filesystem MCP server for file operations
+                # See: https://github.com/modelcontextprotocol/servers
+                "filesystem": {
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-filesystem", str(project_dir.resolve())]
+                },
+                # GitHub MCP server for version control
+                # See: https://github.com/modelcontextprotocol/servers
+                "github": {
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-github"],
+                    "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": github_token} if github_token else {}
+                },
+                # Git MCP server for local version control
+                # See: https://github.com/modelcontextprotocol/servers
+                "git": {
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-git", "--repository", str(project_dir.resolve())]
+                },
+                # Memory MCP server for knowledge graph
+                # See: https://github.com/modelcontextprotocol/servers
+                "memory": {
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-memory"]
+                },
+                # Sequential Thinking MCP server for problem-solving
+                # See: https://github.com/modelcontextprotocol/servers
+                "sequential-thinking": {
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
+                },
+                # Fetch MCP server for web content retrieval
+                # See: https://github.com/modelcontextprotocol/servers
+                "fetch": {
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-fetch"]
                 },
             },
             hooks={

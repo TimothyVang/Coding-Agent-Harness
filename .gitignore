@@ -4,6 +4,31 @@ generations/
 # Log files
 logs/
 
+# Environment and virtual environment
 .env
-venv
-__pycache__tmpclaude-*
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Temporary Claude files
+tmpclaude-*
+
+# Agent memory and state (optional - can be committed if desired)
+AGENT_MEMORY/
+.agent_army/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
