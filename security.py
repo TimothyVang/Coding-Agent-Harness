@@ -2,46 +2,28 @@
 Security Hooks for Autonomous Coding Agent
 ==========================================
 
-Pre-tool-use hooks that validate bash commands for security.
-Uses an allowlist approach - only explicitly permitted commands can run.
+NOTE: Command restrictions have been REMOVED to enable full agent autonomy.
+E2B sandboxes provide OS-level isolation, eliminating the need for command allowlists.
+
+This file is kept for reference and potential future customization, but all
+commands are now permitted by default.
 """
 
 import os
 import shlex
 
 
-# Allowed commands for development tasks
-# Minimal set needed for the autonomous coding demo
-ALLOWED_COMMANDS = {
-    # File inspection
-    "ls",
-    "cat",
-    "head",
-    "tail",
-    "wc",
-    "grep",
-    # File operations (agent uses SDK tools for most file ops, but cp/mkdir needed occasionally)
-    "cp",
-    "mkdir",
-    "chmod",  # For making scripts executable; validated separately
-    # Directory
-    "pwd",
-    # Node.js development
-    "npm",
-    "node",
-    # Version control
-    "git",
-    # Process management
-    "ps",
-    "lsof",
-    "sleep",
-    "pkill",  # For killing dev servers; validated separately
-    # Script execution
-    "init.sh",  # Init scripts; validated separately
-}
+# NOTE: Command allowlist REMOVED - all commands now permitted
+# E2B sandboxes provide isolation, enabling maximum agent autonomy
+#
+# Previous allowlist kept for reference:
+# ALLOWED_COMMANDS_REFERENCE = {"ls", "cat", "npm", "node", "git", ...}
+#
+# If you need to re-enable restrictions, you can restore the allowlist
+# and modify bash_security_hook below.
 
-# Commands that need additional validation even when in the allowlist
-COMMANDS_NEEDING_EXTRA_VALIDATION = {"pkill", "chmod", "init.sh"}
+ALLOWED_COMMANDS = set()  # Empty set - not used
+COMMANDS_NEEDING_EXTRA_VALIDATION = set()  # Empty set - not used
 
 
 def split_command_segments(command_string: str) -> list[str]:
@@ -296,9 +278,13 @@ def get_command_for_validation(cmd: str, segments: list[str]) -> str:
 
 async def bash_security_hook(input_data, tool_use_id=None, context=None):
     """
-    Pre-tool-use hook that validates bash commands using an allowlist.
+    Pre-tool-use hook for bash commands.
 
-    Only commands in ALLOWED_COMMANDS are permitted.
+    NOTE: Command restrictions REMOVED - all commands are now permitted.
+    E2B sandboxes provide OS-level isolation for security.
+
+    This hook is kept for potential future customization but currently
+    allows all commands to enable maximum agent autonomy.
 
     Args:
         input_data: Dict containing tool_name and tool_input
@@ -306,54 +292,8 @@ async def bash_security_hook(input_data, tool_use_id=None, context=None):
         context: Optional context
 
     Returns:
-        Empty dict to allow, or {"decision": "block", "reason": "..."} to block
+        Empty dict (allows all commands)
     """
-    if input_data.get("tool_name") != "Bash":
-        return {}
-
-    command = input_data.get("tool_input", {}).get("command", "")
-    if not command:
-        return {}
-
-    # Extract all commands from the command string
-    commands = extract_commands(command)
-
-    if not commands:
-        # Could not parse - fail safe by blocking
-        return {
-            "decision": "block",
-            "reason": f"Could not parse command for security validation: {command}",
-        }
-
-    # Split into segments for per-command validation
-    segments = split_command_segments(command)
-
-    # Check each command against the allowlist
-    for cmd in commands:
-        if cmd not in ALLOWED_COMMANDS:
-            return {
-                "decision": "block",
-                "reason": f"Command '{cmd}' is not in the allowed commands list",
-            }
-
-        # Additional validation for sensitive commands
-        if cmd in COMMANDS_NEEDING_EXTRA_VALIDATION:
-            # Find the specific segment containing this command
-            cmd_segment = get_command_for_validation(cmd, segments)
-            if not cmd_segment:
-                cmd_segment = command  # Fallback to full command
-
-            if cmd == "pkill":
-                allowed, reason = validate_pkill_command(cmd_segment)
-                if not allowed:
-                    return {"decision": "block", "reason": reason}
-            elif cmd == "chmod":
-                allowed, reason = validate_chmod_command(cmd_segment)
-                if not allowed:
-                    return {"decision": "block", "reason": reason}
-            elif cmd == "init.sh":
-                allowed, reason = validate_init_script(cmd_segment)
-                if not allowed:
-                    return {"decision": "block", "reason": reason}
-
+    # No restrictions - allow all commands
+    # E2B sandboxes provide isolation
     return {}

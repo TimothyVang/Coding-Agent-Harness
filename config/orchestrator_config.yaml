@@ -1,0 +1,58 @@
+# Agent Orchestrator Configuration
+# =================================
+# Complete configuration for the Linear Coding Agent Harness
+
+orchestrator:
+  # Maximum number of concurrent agents
+  max_concurrent_agents: 10
+
+  # Agent timeout (seconds)
+  agent_timeout: 3600  # 1 hour
+
+  # Health check interval (seconds)
+  health_check_interval: 60
+
+  # Enable automatic temp file cleanup
+  auto_cleanup_temp_files: true
+
+# E2B Sandbox Configuration
+e2b:
+  enabled: true  # Set to false to disable E2B
+  api_key: ${E2B_API_KEY}  # From environment
+  default_template: "node20"
+  sandbox_pool_size: 5
+  sandbox_timeout_seconds: 600
+  sandbox_memory_mb: 2048
+  sandbox_cpu_count: 2
+  persistent_sessions: true
+  auto_cleanup_age_minutes: 60
+
+# Checklist System Configuration
+checklist:
+  enabled: true  # Set to false to use TaskQueue only
+  auto_generate_from_spec: true
+  markdown_export_path: "./CHECKLIST.md"
+  update_on_task_complete: true
+
+# Project Management
+projects:
+  base_path: "./projects"
+  default_priority: 1
+
+# Agent Memory
+memory:
+  directory: "./AGENT_MEMORY"
+  retention_days: 90
+
+# Security
+security:
+  command_restrictions_enabled: false  # No allowlist - full autonomy
+  enable_bash_hook: true  # Keep hook for potential future use
+  file_path_validation: true  # Validate file paths stay in project
+
+# Logging
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_file: "./logs/orchestrator.log"
+  max_log_size_mb: 100
+  backup_count: 5

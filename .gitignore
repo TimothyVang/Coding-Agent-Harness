@@ -15,8 +15,10 @@ __pycache__/
 *$py.class
 *.so
 
-# Temporary Claude files
+# Temporary Claude Code SDK files
+tmpclaude-*-cwd
 tmpclaude-*
+*.tmp
 
 # Agent memory and state (optional - can be committed if desired)
 AGENT_MEMORY/

@@ -18,8 +18,9 @@ Agent Types:
 - RefactorAgent: Code quality and refactoring (✅ IMPLEMENTED)
 - DatabaseAgent: Schema design and optimization (✅ IMPLEMENTED)
 - UIDesignAgent: UI/UX and accessibility (✅ IMPLEMENTED)
+- E2BSandboxAgent: E2B sandbox execution (✅ IMPLEMENTED)
 
-All 12 specialized agents implemented! 🎉
+All 13 specialized agents implemented! 🎉
 """
 
 from .base_agent import BaseAgent
@@ -35,6 +36,7 @@ from .analytics_agent import AnalyticsAgent
 from .refactor_agent import RefactorAgent
 from .database_agent import DatabaseAgent
 from .ui_design_agent import UIDesignAgent
+from .e2b_sandbox_agent import E2BSandboxAgent
 
 __all__ = [
     'BaseAgent',
@@ -50,4 +52,5 @@ __all__ = [
     'RefactorAgent',
     'DatabaseAgent',
     'UIDesignAgent',
+    'E2BSandboxAgent',
 ]

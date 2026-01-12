@@ -479,3 +479,18 @@ class MessageTypes:
     BEST_PRACTICES_UPDATE = "best_practices_update"
     PATTERN_LEARNED = "pattern_learned"
     INSIGHTS_GENERATED = "insights_generated"
+
+    # E2B Execution message types
+    EXECUTION_REQUEST = "execution_request"
+    EXECUTION_RESULT = "execution_result"
+    EXECUTION_FAILED = "execution_failed"
+
+    # E2B Sandbox lifecycle
+    SANDBOX_CREATED = "sandbox_created"
+    SANDBOX_TERMINATED = "sandbox_terminated"
+    SANDBOX_ERROR = "sandbox_error"
+
+    # Checklist system message types
+    CHECKLIST_INITIALIZED = "checklist_initialized"
+    CHECKLIST_TASK_UPDATE = "checklist_task_update"
+    CHECKLIST_BLOCKING_TASK = "checklist_blocking_task"

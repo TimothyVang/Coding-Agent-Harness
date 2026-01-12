@@ -1,0 +1,40 @@
+# E2B Sandbox Configuration
+# =========================
+# Configuration for E2B sandbox execution environments
+
+e2b:
+  # Enable/disable E2B sandbox execution
+  # When disabled, falls back to local subprocess execution
+  enabled: true
+
+  # E2B API key (can also be set via E2B_API_KEY environment variable)
+  # Get your API key from: https://e2b.dev/dashboard
+  api_key: ${E2B_API_KEY}
+
+  # Default sandbox template
+  # Available templates: node20, python311, ubuntu, etc.
+  # See: https://e2b.dev/docs/templates
+  default_template: "node20"
+
+  # Sandbox pool configuration
+  sandbox_pool_size: 5  # Maximum number of sandboxes in pool
+
+  # Sandbox resource limits
+  sandbox_timeout_seconds: 600  # 10 minutes default timeout
+  sandbox_memory_mb: 2048  # 2GB memory per sandbox
+  sandbox_cpu_count: 2  # CPU cores per sandbox
+
+  # Session management
+  persistent_sessions: true  # Reuse sandboxes across tasks
+  auto_cleanup_age_minutes: 60  # Auto-cleanup sandboxes after 1 hour of inactivity
+
+  # Execution settings
+  default_execution_timeout: 300  # 5 minutes for commands
+  allow_network_access: true  # Enable network in sandboxes
+
+# Fallback configuration (when E2B disabled)
+fallback:
+  # Local execution settings
+  use_subprocess: true
+  inherit_environment: true
+  timeout_seconds: 300

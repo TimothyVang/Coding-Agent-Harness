@@ -1,3 +1,10 @@
 claude-code-sdk>=0.0.25
 python-dotenv>=1.0.0
 pyyaml>=6.0
+
+# E2B sandbox execution
+e2b>=2.2.0
+e2b-desktop>=2.2.0
+
+# MCP protocol (if not already included by claude-code-sdk)
+mcp>=0.1.0
