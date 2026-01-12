@@ -25,7 +25,7 @@ from core.project_registry import ProjectRegistry
 from core.task_queue import TaskQueue
 from core.message_bus import MessageBus, MessageTypes
 from core.agent_memory import AgentMemory
-from agents import BaseAgent, BuilderAgent
+from agents import BaseAgent, BuilderAgent, VerifierAgent, TestGeneratorAgent
 from client import create_client
 
 
@@ -57,7 +57,7 @@ class AgentOrchestrator:
 
         # Agent pool
         self.agents: Dict[str, BaseAgent] = {}
-        self.agent_types_available = ["builder"]  # Will expand to all 9 types
+        self.agent_types_available = ["builder", "verifier", "test_generator"]  # 3 of 9 agents implemented
 
         # Orchestrator state
         self.running = False
@@ -121,26 +121,43 @@ class AgentOrchestrator:
         """Initialize pool of agents."""
         print("[Orchestrator] Initializing agent pool...")
 
-        # For now, create one Builder agent
-        # In production, would create pool based on config
-        agent_id = "builder-001"
+        # Create agents for each type
+        # In production, would create multiple agents of each type based on workload
 
-        # Create Claude client for the agent
-        # In production, would manage client pool
-        model = self.config.get("default_model")
-
-        # Create builder agent
+        # Builder agents - for feature implementation
         builder = BuilderAgent(
-            agent_id=agent_id,
+            agent_id="builder-001",
             config=self.config,
             message_bus=self.message_bus,
             claude_client=None  # Will be created per-project as needed
         )
-
         await builder.initialize()
-        self.agents[agent_id] = builder
+        self.agents["builder-001"] = builder
+        print(f"[Orchestrator] Created agent: builder-001 (type: builder)")
 
-        print(f"[Orchestrator] Created agent: {agent_id} (type: builder)")
+        # Verifier agents - for quality assurance
+        verifier = VerifierAgent(
+            agent_id="verifier-001",
+            config=self.config,
+            message_bus=self.message_bus,
+            claude_client=None
+        )
+        await verifier.initialize()
+        self.agents["verifier-001"] = verifier
+        print(f"[Orchestrator] Created agent: verifier-001 (type: verifier)")
+
+        # Test Generator agents - for test creation
+        test_gen = TestGeneratorAgent(
+            agent_id="testgen-001",
+            config=self.config,
+            message_bus=self.message_bus,
+            claude_client=None
+        )
+        await test_gen.initialize()
+        self.agents["testgen-001"] = test_gen
+        print(f"[Orchestrator] Created agent: testgen-001 (type: test_generator)")
+
+        print(f"[Orchestrator] Agent pool initialized with {len(self.agents)} agents")
 
     async def _task_processor(self):
         """

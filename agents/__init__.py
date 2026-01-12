@@ -7,9 +7,9 @@ Collection of specialized agents for the Universal AI Development Platform.
 Agent Types:
 - BaseAgent: Foundation class for all agents
 - BuilderAgent: Feature implementation (✅ IMPLEMENTED)
+- VerifierAgent: Quality assurance and verification (✅ IMPLEMENTED)
+- TestGeneratorAgent: Automated test creation (✅ IMPLEMENTED)
 - ArchitectAgent: Planning and design
-- TestGeneratorAgent: Automated test creation
-- VerifierAgent: Quality assurance and verification
 - ReviewerAgent: Code review
 - DevOpsAgent: Infrastructure and deployment
 - DocumentationAgent: Documentation generation
@@ -19,8 +19,12 @@ Agent Types:
 
 from .base_agent import BaseAgent
 from .builder_agent import BuilderAgent
+from .verifier_agent import VerifierAgent
+from .test_generator_agent import TestGeneratorAgent
 
 __all__ = [
     'BaseAgent',
     'BuilderAgent',
+    'VerifierAgent',
+    'TestGeneratorAgent',
 ]
