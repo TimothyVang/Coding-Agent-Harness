@@ -21,10 +21,14 @@ from .base_agent import BaseAgent
 from .builder_agent import BuilderAgent
 from .verifier_agent import VerifierAgent
 from .test_generator_agent import TestGeneratorAgent
+from .architect_agent import ArchitectAgent
+from .reviewer_agent import ReviewerAgent
 
 __all__ = [
     'BaseAgent',
     'BuilderAgent',
     'VerifierAgent',
     'TestGeneratorAgent',
+    'ArchitectAgent',
+    'ReviewerAgent',
 ]

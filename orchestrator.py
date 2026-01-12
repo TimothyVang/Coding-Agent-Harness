@@ -25,7 +25,7 @@ from core.project_registry import ProjectRegistry
 from core.task_queue import TaskQueue
 from core.message_bus import MessageBus, MessageTypes
 from core.agent_memory import AgentMemory
-from agents import BaseAgent, BuilderAgent, VerifierAgent, TestGeneratorAgent
+from agents import BaseAgent, BuilderAgent, VerifierAgent, TestGeneratorAgent, ArchitectAgent, ReviewerAgent
 from client import create_client
 
 
@@ -57,7 +57,7 @@ class AgentOrchestrator:
 
         # Agent pool
         self.agents: Dict[str, BaseAgent] = {}
-        self.agent_types_available = ["builder", "verifier", "test_generator"]  # 3 of 9 agents implemented
+        self.agent_types_available = ["architect", "builder", "verifier", "test_generator", "reviewer"]  # 5 of 9 agents implemented
 
         # Orchestrator state
         self.running = False
@@ -124,6 +124,17 @@ class AgentOrchestrator:
         # Create agents for each type
         # In production, would create multiple agents of each type based on workload
 
+        # Architect agents - for planning and design
+        architect = ArchitectAgent(
+            agent_id="architect-001",
+            config=self.config,
+            message_bus=self.message_bus,
+            claude_client=None  # Will be created per-project as needed
+        )
+        await architect.initialize()
+        self.agents["architect-001"] = architect
+        print(f"[Orchestrator] Created agent: architect-001 (type: architect)")
+
         # Builder agents - for feature implementation
         builder = BuilderAgent(
             agent_id="builder-001",
@@ -134,6 +145,17 @@ class AgentOrchestrator:
         await builder.initialize()
         self.agents["builder-001"] = builder
         print(f"[Orchestrator] Created agent: builder-001 (type: builder)")
+
+        # Test Generator agents - for test creation
+        test_gen = TestGeneratorAgent(
+            agent_id="testgen-001",
+            config=self.config,
+            message_bus=self.message_bus,
+            claude_client=None
+        )
+        await test_gen.initialize()
+        self.agents["testgen-001"] = test_gen
+        print(f"[Orchestrator] Created agent: testgen-001 (type: test_generator)")
 
         # Verifier agents - for quality assurance
         verifier = VerifierAgent(
@@ -146,16 +168,16 @@ class AgentOrchestrator:
         self.agents["verifier-001"] = verifier
         print(f"[Orchestrator] Created agent: verifier-001 (type: verifier)")
 
-        # Test Generator agents - for test creation
-        test_gen = TestGeneratorAgent(
-            agent_id="testgen-001",
+        # Reviewer agents - for code review
+        reviewer = ReviewerAgent(
+            agent_id="reviewer-001",
             config=self.config,
             message_bus=self.message_bus,
             claude_client=None
         )
-        await test_gen.initialize()
-        self.agents["testgen-001"] = test_gen
-        print(f"[Orchestrator] Created agent: testgen-001 (type: test_generator)")
+        await reviewer.initialize()
+        self.agents["reviewer-001"] = reviewer
+        print(f"[Orchestrator] Created agent: reviewer-001 (type: reviewer)")
 
         print(f"[Orchestrator] Agent pool initialized with {len(self.agents)} agents")
 
