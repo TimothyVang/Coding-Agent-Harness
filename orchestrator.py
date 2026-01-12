@@ -25,7 +25,11 @@ from core.project_registry import ProjectRegistry
 from core.task_queue import TaskQueue
 from core.message_bus import MessageBus, MessageTypes
 from core.agent_memory import AgentMemory
-from agents import BaseAgent, BuilderAgent, VerifierAgent, TestGeneratorAgent, ArchitectAgent, ReviewerAgent
+from agents import (
+    BaseAgent, ArchitectAgent, BuilderAgent, TestGeneratorAgent,
+    VerifierAgent, ReviewerAgent, DevOpsAgent, DocumentationAgent,
+    ReporterAgent, AnalyticsAgent
+)
 from client import create_client
 
 
@@ -57,7 +61,10 @@ class AgentOrchestrator:
 
         # Agent pool
         self.agents: Dict[str, BaseAgent] = {}
-        self.agent_types_available = ["architect", "builder", "verifier", "test_generator", "reviewer"]  # 5 of 9 agents implemented
+        self.agent_types_available = [
+            "architect", "builder", "test_generator", "verifier", "reviewer",
+            "devops", "documentation", "reporter", "analytics"
+        ]  # All 9 agents implemented!
 
         # Orchestrator state
         self.running = False
@@ -179,7 +186,52 @@ class AgentOrchestrator:
         self.agents["reviewer-001"] = reviewer
         print(f"[Orchestrator] Created agent: reviewer-001 (type: reviewer)")
 
+        # DevOps agents - for infrastructure and deployment
+        devops = DevOpsAgent(
+            agent_id="devops-001",
+            config=self.config,
+            message_bus=self.message_bus,
+            claude_client=None
+        )
+        await devops.initialize()
+        self.agents["devops-001"] = devops
+        print(f"[Orchestrator] Created agent: devops-001 (type: devops)")
+
+        # Documentation agents - for documentation generation
+        documentation = DocumentationAgent(
+            agent_id="docs-001",
+            config=self.config,
+            message_bus=self.message_bus,
+            claude_client=None
+        )
+        await documentation.initialize()
+        self.agents["docs-001"] = documentation
+        print(f"[Orchestrator] Created agent: docs-001 (type: documentation)")
+
+        # Reporter agents - for report generation
+        reporter = ReporterAgent(
+            agent_id="reporter-001",
+            config=self.config,
+            message_bus=self.message_bus,
+            claude_client=None
+        )
+        await reporter.initialize()
+        self.agents["reporter-001"] = reporter
+        print(f"[Orchestrator] Created agent: reporter-001 (type: reporter)")
+
+        # Analytics agents - for pattern analysis and insights
+        analytics = AnalyticsAgent(
+            agent_id="analytics-001",
+            config=self.config,
+            message_bus=self.message_bus,
+            claude_client=None
+        )
+        await analytics.initialize()
+        self.agents["analytics-001"] = analytics
+        print(f"[Orchestrator] Created agent: analytics-001 (type: analytics)")
+
         print(f"[Orchestrator] Agent pool initialized with {len(self.agents)} agents")
+        print("[Orchestrator] All 9 specialized agent types ready!")
 
     async def _task_processor(self):
         """
