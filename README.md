@@ -1,14 +1,15 @@
-# Autonomous Coding Agent Demo (Linear-Integrated)
+# Autonomous Coding Agent Harness
 
-A minimal harness demonstrating long-running autonomous coding with the Claude Agent SDK. This demo implements a two-agent pattern (initializer + coding agent) with **Linear as the core project management system** for tracking all work.
+A minimal harness demonstrating long-running autonomous coding with the Claude Agent SDK. This demo implements a two-agent pattern (initializer + coding agent) with a **local checklist system** for tracking all work.
 
 ## Key Features
 
-- **Linear Integration**: All work is tracked as Linear issues, not local files
-- **Real-time Visibility**: Watch agent progress directly in your Linear workspace
-- **Session Handoff**: Agents communicate via Linear comments, not text files
-- **Two-Agent Pattern**: Initializer creates Linear project & issues, coding agents implement them
-- **Browser Testing**: Puppeteer MCP for UI verification
+- **Local Checklist System**: All work is tracked in `.project_checklist.json` with automatic `CHECKLIST.md` generation
+- **Real-time Visibility**: Check `CHECKLIST.md` to see project progress at any time
+- **Session Handoff**: Agents communicate via checklist notes and session logs
+- **Two-Agent Pattern**: Initializer creates checklist, coding agents implement tasks
+- **Browser Testing**: Playwright MCP for comprehensive UI verification
+- **Windows Compatible**: Designed to work seamlessly on Windows systems
 - **Claude Opus 4.5**: Uses Claude's most capable model by default
 
 ## Prerequisites
@@ -25,21 +26,33 @@ pip install -r requirements.txt
 
 ### 2. Set Up Authentication
 
-You need two authentication tokens:
+You need a Claude Code OAuth token:
 
-**Claude Code OAuth Token:**
-```bash
+**Windows (PowerShell):**
+```powershell
 # Generate the token using Claude Code CLI
 claude setup-token
 
 # Set the environment variable
-export CLAUDE_CODE_OAUTH_TOKEN='your-oauth-token-here'
+$env:CLAUDE_CODE_OAUTH_TOKEN = "your-oauth-token-here"
 ```
 
-**Linear API Key:**
+**Windows (Command Prompt):**
+```cmd
+# Generate the token
+claude setup-token
+
+# Set the environment variable
+set CLAUDE_CODE_OAUTH_TOKEN=your-oauth-token-here
+```
+
+**Linux/Mac:**
 ```bash
-# Get your API key from: https://linear.app/YOUR-TEAM/settings/api
-export LINEAR_API_KEY='lin_api_xxxxxxxxxxxxx'
+# Generate the token
+claude setup-token
+
+# Set the environment variable
+export CLAUDE_CODE_OAUTH_TOKEN='your-oauth-token-here'
 ```
 
 ### 3. Verify Installation
@@ -51,6 +64,12 @@ pip show claude-code-sdk  # Check SDK is installed
 
 ## Quick Start
 
+**Windows:**
+```powershell
+python autonomous_agent_demo.py --project-dir ./my_project
+```
+
+**Linux/Mac:**
 ```bash
 python autonomous_agent_demo.py --project-dir ./my_project
 ```
@@ -62,29 +81,33 @@ python autonomous_agent_demo.py --project-dir ./my_project --max-iterations 3
 
 ## How It Works
 
-### Linear-Centric Workflow
+### Checklist-Centric Workflow
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    LINEAR-INTEGRATED WORKFLOW               │
+│              CHECKLIST-INTEGRATED WORKFLOW                  │
 ├─────────────────────────────────────────────────────────────┤
-│  app_spec.txt ──► Initializer Agent ──► Linear Issues (50) │
+│  app_spec.txt ──► Initializer Agent ──► Checklist (30-50)  │
 │                                              │               │
 │                    ┌─────────────────────────▼──────────┐   │
-│                    │        LINEAR WORKSPACE            │   │
+│                    │   LOCAL CHECKLIST SYSTEM           │   │
+│                    │  .project_checklist.json           │   │
 │                    │  ┌────────────────────────────┐    │   │
-│                    │  │ Issue: Auth - Login flow   │    │   │
+│                    │  │ Task: Auth - Login flow    │    │   │
 │                    │  │ Status: Todo → In Progress │    │   │
-│                    │  │ Comments: [session notes]  │    │   │
+│                    │  │ Notes: [implementation]    │    │   │
 │                    │  └────────────────────────────┘    │   │
+│                    │  Automatically generates:          │   │
+│                    │  CHECKLIST.md (markdown view)      │   │
 │                    └────────────────────────────────────┘   │
 │                                              │               │
-│                    Coding Agent queries Linear              │
-│                    ├── Search for Todo issues               │
+│                    Coding Agent reads checklist             │
+│                    ├── Find next Todo task                  │
 │                    ├── Update status to In Progress         │
-│                    ├── Implement & test with Puppeteer      │
-│                    ├── Add comment with implementation notes│
-│                    └── Update status to Done                │
+│                    ├── Implement & test with Playwright     │
+│                    ├── Add note with implementation details │
+│                    ├── Update status to Done                │
+│                    └── Export updated CHECKLIST.md          │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -92,34 +115,33 @@ python autonomous_agent_demo.py --project-dir ./my_project --max-iterations 3
 
 1. **Initializer Agent (Session 1):**
    - Reads `app_spec.txt`
-   - Lists teams and creates a new Linear project
-   - Creates 50 Linear issues with detailed test steps
-   - Creates a META issue for session tracking
+   - Creates 30-50 tasks in the checklist system
    - Sets up project structure, `init.sh`, and git
+   - Generates initial `CHECKLIST.md`
 
 2. **Coding Agent (Sessions 2+):**
-   - Queries Linear for highest-priority Todo issue
+   - Reads checklist to find next Todo task
    - Runs verification tests on previously completed features
-   - Claims issue (status → In Progress)
+   - Claims task (status → In Progress)
    - Implements the feature
-   - Tests via Puppeteer browser automation
-   - Adds implementation comment to issue
+   - Tests via Playwright browser automation
+   - Adds implementation notes to task
    - Marks complete (status → Done)
-   - Updates META issue with session summary
+   - Updates `CHECKLIST.md` automatically
 
-### Session Handoff via Linear
+### Session Handoff via Checklist
 
-Instead of local text files, agents communicate through:
-- **Issue Comments**: Implementation details, blockers, context
-- **META Issue**: Session summaries and handoff notes
-- **Issue Status**: Todo / In Progress / Done workflow
+Agents communicate through:
+- **Task Notes**: Implementation details, blockers, context
+- **Session Logs**: Session summaries and handoff notes stored in checklist
+- **Task Status**: Todo / In Progress / Done workflow
+- **CHECKLIST.md**: Always up-to-date markdown view of all tasks
 
 ## Environment Variables
 
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `CLAUDE_CODE_OAUTH_TOKEN` | Claude Code OAuth token (from `claude setup-token`) | Yes |
-| `LINEAR_API_KEY` | Linear API key for MCP access | Yes |
 
 ## Command Line Options
 
@@ -132,18 +154,18 @@ Instead of local text files, agents communicate through:
 ## Project Structure
 
 ```
-linear-agent-harness/
+agent-harness/
 ├── autonomous_agent_demo.py  # Main entry point
 ├── agent.py                  # Agent session logic
 ├── client.py                 # Claude SDK + MCP client configuration
+├── checklist_manager.py      # Local checklist system for task tracking
 ├── security.py               # Bash command allowlist and validation
 ├── progress.py               # Progress tracking utilities
 ├── prompts.py                # Prompt loading utilities
-├── linear_config.py          # Linear configuration constants
 ├── prompts/
 │   ├── app_spec.txt          # Application specification
-│   ├── initializer_prompt.md # First session prompt (creates Linear issues)
-│   └── coding_prompt.md      # Continuation session prompt (works issues)
+│   ├── initializer_prompt.md # First session prompt (creates checklist)
+│   └── coding_prompt.md      # Continuation session prompt (works tasks)
 └── requirements.txt          # Python dependencies
 ```
 
@@ -153,7 +175,9 @@ After running, your project directory will contain:
 
 ```
 my_project/
-├── .linear_project.json      # Linear project state (marker file)
+├── .project_checklist.json   # Checklist state (JSON format)
+├── CHECKLIST.md              # Human-readable checklist (auto-generated)
+├── checklist_manager.py      # Copied from harness for agent use
 ├── app_spec.txt              # Copied specification
 ├── init.sh                   # Environment setup script
 ├── .claude_settings.json     # Security settings
@@ -164,32 +188,34 @@ my_project/
 
 | Server | Transport | Purpose |
 |--------|-----------|---------|
-| **Linear** | HTTP (Streamable HTTP) | Project management - issues, status, comments |
-| **Puppeteer** | stdio | Browser automation for UI testing |
+| **Playwright** | stdio | Browser automation for UI testing and verification |
+
+See: https://playwright.dev/docs/intro
 
 ## Security Model
 
-This demo uses defense-in-depth security (see `security.py` and `client.py`):
+This harness uses defense-in-depth security (see `security.py` and `client.py`):
 
 1. **OS-level Sandbox:** Bash commands run in an isolated environment
 2. **Filesystem Restrictions:** File operations restricted to project directory
 3. **Bash Allowlist:** Only specific commands permitted (npm, node, git, etc.)
 4. **MCP Permissions:** Tools explicitly allowed in security settings
 
-## Linear Setup
+## Viewing Progress
 
-Before running, ensure you have:
+You can check project progress at any time:
 
-1. A Linear workspace with at least one team
-2. An API key with read/write permissions (from Settings > API)
-3. The agent will automatically detect your team and create a project
+1. **Read CHECKLIST.md** - Human-readable markdown with all tasks and status
+2. **Check .project_checklist.json** - Full JSON data including notes and session logs
+3. **Use Python** to query the checklist:
+   ```python
+   from pathlib import Path
+   from checklist_manager import ChecklistManager
 
-The initializer agent will create:
-- A new Linear project named after your app
-- 50 feature issues based on `app_spec.txt`
-- 1 META issue for session tracking and handoff
-
-All subsequent coding agents will work from this Linear project.
+   manager = ChecklistManager(Path("./my_project"))
+   summary = manager.get_progress_summary()
+   print(f"Progress: {summary['Done']}/{sum(summary.values())} tasks complete")
+   ```
 
 ## Customization
 
@@ -197,9 +223,10 @@ All subsequent coding agents will work from this Linear project.
 
 Edit `prompts/app_spec.txt` to specify a different application to build.
 
-### Adjusting Issue Count
+### Adjusting Task Count
 
-Edit `prompts/initializer_prompt.md` and change "50 issues" to your desired count.
+The initializer agent will automatically create 30-50 tasks based on the complexity
+of your `app_spec.txt`. The agent determines the optimal number.
 
 ### Modifying Allowed Commands
 
@@ -208,28 +235,25 @@ Edit `security.py` to add or remove commands from `ALLOWED_COMMANDS`.
 ## Troubleshooting
 
 **"CLAUDE_CODE_OAUTH_TOKEN not set"**
-Run `claude setup-token` to generate a token, then export it.
-
-**"LINEAR_API_KEY not set"**
-Get your API key from `https://linear.app/YOUR-TEAM/settings/api`
+Run `claude setup-token` to generate a token, then export/set it as an environment variable.
 
 **"Appears to hang on first run"**
-Normal behavior. The initializer is creating a Linear project and 50 issues with detailed descriptions. Watch for `[Tool: mcp__linear__create_issue]` output.
+Normal behavior. The initializer is creating the checklist and setting up the project.
+Watch for `[Tool: ...]` output indicating progress.
 
 **"Command blocked by security hook"**
 The agent tried to run a disallowed command. Add it to `ALLOWED_COMMANDS` in `security.py` if needed.
 
-**"MCP server connection failed"**
-Verify your `LINEAR_API_KEY` is valid and has appropriate permissions. The Linear MCP server uses HTTP transport at `https://mcp.linear.app/mcp`.
+**"Playwright MCP not working"**
+Ensure you have Node.js installed. The MCP server is installed automatically via npx.
+Try running: `npx -y @modelcontextprotocol/server-playwright` manually to test.
 
-## Viewing Progress
+## Windows-Specific Notes
 
-Open your Linear workspace to see:
-- The project created by the initializer agent
-- All 50 issues organized under the project
-- Real-time status changes (Todo → In Progress → Done)
-- Implementation comments on each issue
-- Session summaries on the META issue
+- Use PowerShell or Command Prompt for setting environment variables
+- The harness uses bash commands internally but runs them through Git Bash (included with Git for Windows)
+- Ensure Git for Windows is installed: https://git-scm.com/download/win
+- Path separators are handled automatically by Python's `pathlib`
 
 ## License
 

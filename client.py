@@ -15,43 +15,31 @@ from claude_code_sdk.types import HookMatcher
 from security import bash_security_hook
 
 
-# Puppeteer MCP tools for browser automation
-PUPPETEER_TOOLS = [
-    "mcp__puppeteer__puppeteer_navigate",
-    "mcp__puppeteer__puppeteer_screenshot",
-    "mcp__puppeteer__puppeteer_click",
-    "mcp__puppeteer__puppeteer_fill",
-    "mcp__puppeteer__puppeteer_select",
-    "mcp__puppeteer__puppeteer_hover",
-    "mcp__puppeteer__puppeteer_evaluate",
-]
-
-# Linear MCP tools for project management
-# Official Linear MCP server at mcp.linear.app
-LINEAR_TOOLS = [
-    # Team & Project discovery
-    "mcp__linear__list_teams",
-    "mcp__linear__get_team",
-    "mcp__linear__list_projects",
-    "mcp__linear__get_project",
-    "mcp__linear__create_project",
-    "mcp__linear__update_project",
-    # Issue management
-    "mcp__linear__list_issues",
-    "mcp__linear__get_issue",
-    "mcp__linear__create_issue",
-    "mcp__linear__update_issue",
-    "mcp__linear__list_my_issues",
-    # Comments
-    "mcp__linear__list_comments",
-    "mcp__linear__create_comment",
-    # Workflow
-    "mcp__linear__list_issue_statuses",
-    "mcp__linear__get_issue_status",
-    "mcp__linear__list_issue_labels",
-    # Users
-    "mcp__linear__list_users",
-    "mcp__linear__get_user",
+# Playwright MCP tools for browser automation and testing
+# See: https://playwright.dev/docs/intro
+PLAYWRIGHT_TOOLS = [
+    "mcp__playwright__browser_navigate",
+    "mcp__playwright__browser_snapshot",
+    "mcp__playwright__browser_click",
+    "mcp__playwright__browser_type",
+    "mcp__playwright__browser_fill_form",
+    "mcp__playwright__browser_select_option",
+    "mcp__playwright__browser_hover",
+    "mcp__playwright__browser_evaluate",
+    "mcp__playwright__browser_take_screenshot",
+    "mcp__playwright__browser_wait_for",
+    "mcp__playwright__browser_console_messages",
+    "mcp__playwright__browser_network_requests",
+    "mcp__playwright__browser_close",
+    "mcp__playwright__browser_resize",
+    "mcp__playwright__browser_press_key",
+    "mcp__playwright__browser_drag",
+    "mcp__playwright__browser_tabs",
+    "mcp__playwright__browser_navigate_back",
+    "mcp__playwright__browser_handle_dialog",
+    "mcp__playwright__browser_file_upload",
+    "mcp__playwright__browser_run_code",
+    "mcp__playwright__browser_install",
 ]
 
 # Built-in tools
@@ -86,14 +74,7 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
     if not api_key:
         raise ValueError(
             "CLAUDE_CODE_OAUTH_TOKEN environment variable not set.\n"
-            "Run 'claude setup-token after installing the Claude Code CLI."
-        )
-
-    linear_api_key = os.environ.get("LINEAR_API_KEY")
-    if not linear_api_key:
-        raise ValueError(
-            "LINEAR_API_KEY environment variable not set.\n"
-            "Get your API key from: https://linear.app/YOUR-TEAM/settings/api"
+            "Run 'claude setup-token' after installing the Claude Code CLI."
         )
 
     # Create comprehensive security settings
@@ -113,10 +94,8 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
                 # Bash permission granted here, but actual commands are validated
                 # by the bash_security_hook (see security.py for allowed commands)
                 "Bash(*)",
-                # Allow Puppeteer MCP tools for browser automation
-                *PUPPETEER_TOOLS,
-                # Allow Linear MCP tools for project management
-                *LINEAR_TOOLS,
+                # Allow Playwright MCP tools for browser automation and testing
+                *PLAYWRIGHT_TOOLS,
             ],
         },
     }
@@ -133,29 +112,21 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
     print("   - Sandbox enabled (OS-level bash isolation)")
     print(f"   - Filesystem restricted to: {project_dir.resolve()}")
     print("   - Bash commands restricted to allowlist (see security.py)")
-    print("   - MCP servers: puppeteer (browser automation), linear (project management)")
+    print("   - MCP server: playwright (browser automation and testing)")
     print()
 
     return ClaudeSDKClient(
         options=ClaudeCodeOptions(
             model=model,
-            system_prompt="You are an expert full-stack developer building a production-quality web application. You use Linear for project management and tracking all your work.",
+            system_prompt="You are an expert full-stack developer building a production-quality web application. You track your work using a local checklist system and test your application using Playwright.",
             allowed_tools=[
                 *BUILTIN_TOOLS,
-                *PUPPETEER_TOOLS,
-                *LINEAR_TOOLS,
+                *PLAYWRIGHT_TOOLS,
             ],
             mcp_servers={
-                "puppeteer": {"command": "npx", "args": ["puppeteer-mcp-server"]},
-                # Linear MCP with Streamable HTTP transport (recommended over SSE)
-                # See: https://linear.app/docs/mcp
-                "linear": {
-                    "type": "http",
-                    "url": "https://mcp.linear.app/mcp",
-                    "headers": {
-                        "Authorization": f"Bearer {linear_api_key}"
-                    }
-                }
+                # Playwright MCP server for browser automation
+                # See: https://playwright.dev/docs/intro
+                "playwright": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-playwright"]},
             },
             hooks={
                 "PreToolUse": [

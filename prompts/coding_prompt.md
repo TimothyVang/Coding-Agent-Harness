@@ -3,8 +3,9 @@
 You are continuing work on a long-running autonomous development task.
 This is a FRESH context window - you have no memory of previous sessions.
 
-You have access to Linear for project management via MCP tools. Linear is your
-single source of truth for what needs to be built and what's been completed.
+You use a local checklist system to track project tasks. The checklist
+is stored in `.project_checklist.json` and automatically generates `CHECKLIST.md`
+for easy viewing.
 
 ### STEP 1: GET YOUR BEARINGS (MANDATORY)
 
@@ -20,37 +21,51 @@ ls -la
 # 3. Read the project specification to understand what you're building
 cat app_spec.txt
 
-# 4. Read the Linear project state
-cat .linear_project.json
-
-# 5. Check recent git history
-git log --oneline -20
+# 4. Read the checklist to see task status
+cat CHECKLIST.md
 ```
 
 Understanding the `app_spec.txt` is critical - it contains the full requirements
 for the application you're building.
 
-### STEP 2: CHECK LINEAR STATUS
+### STEP 2: CHECK CHECKLIST STATUS
 
-Query Linear to understand current project state. The `.linear_project.json` file
-contains the `project_id` and `team_id` you should use for all Linear queries.
+Use Python to check the current project status:
 
-1. **Find the META issue** for session context:
-   Use `mcp__linear__list_issues` with the project ID from `.linear_project.json`
-   and search for "[META] Project Progress Tracker".
-   Read the issue description and recent comments for context from previous sessions.
+```python
+from pathlib import Path
+from checklist_manager import ChecklistManager
 
-2. **Count progress:**
-   Use `mcp__linear__list_issues` with the project ID to get all issues, then count:
-   - Issues with status "Done" = completed
-   - Issues with status "Todo" = remaining
-   - Issues with status "In Progress" = currently being worked on
+manager = ChecklistManager(Path.cwd())
 
-3. **Check for in-progress work:**
-   If any issue is "In Progress", that should be your first priority.
-   A previous session may have been interrupted.
+# Get progress summary
+summary = manager.get_progress_summary()
+print(f"Progress: {summary['Done']}/{sum(summary.values())} tasks complete")
+print(f"  ✓ Done: {summary['Done']}")
+print(f"  ⚙ In Progress: {summary['In Progress']}")
+print(f"  ☐ Todo: {summary['Todo']}")
 
-### STEP 3: START SERVERS (IF NOT RUNNING)
+# Check for in-progress task (from interrupted session)
+in_progress = manager.get_tasks_by_status("In Progress")
+if in_progress:
+    print("\n⚠ Found in-progress task from previous session:")
+    task = in_progress[0]
+    print(f"  #{task['id']}: {task['title']}")
+
+# Get next todo task
+next_task = manager.get_next_task()
+if next_task:
+    print(f"\nNext task: #{next_task['id']} - {next_task['title']}")
+```
+
+### STEP 3: CHECK GIT HISTORY
+
+```bash
+# Check recent commits to understand what's been done
+git log --oneline -10
+```
+
+### STEP 4: START SERVERS (IF NOT RUNNING)
 
 If `init.sh` exists, run it:
 ```bash
@@ -58,237 +73,265 @@ chmod +x init.sh
 ./init.sh
 ```
 
-Otherwise, start servers manually and document the process.
+Otherwise, start servers manually based on the project structure.
 
-### STEP 4: VERIFICATION TEST (CRITICAL!)
+### STEP 5: VERIFICATION TEST (CRITICAL!)
 
 **MANDATORY BEFORE NEW WORK:**
 
 The previous session may have introduced bugs. Before implementing anything
-new, you MUST run verification tests.
+new, you MUST run verification tests using Playwright.
 
-Use `mcp__linear__list_issues` with the project ID and status "Done" to find 1-2
-completed features that are core to the app's functionality.
+Use Python to find completed tasks and test 1-2 core features:
 
-Test these through the browser using Puppeteer:
+```python
+manager = ChecklistManager(Path.cwd())
+completed_tasks = manager.get_tasks_by_status("Done")
+print("Completed tasks to verify:")
+for task in completed_tasks[:3]:
+    print(f"  #{task['id']}: {task['title']}")
+```
+
+Test these through the browser using Playwright MCP tools:
 - Navigate to the feature
 - Verify it still works as expected
 - Take screenshots to confirm
+- Check console for errors
 
 **If you find ANY issues (functional or visual):**
-- Use `mcp__linear__update_issue` to set status back to "In Progress"
-- Add a comment explaining what broke
-- Fix the issue BEFORE moving to new features
-- This includes UI bugs like:
-  * White-on-white text or poor contrast
-  * Random characters displayed
-  * Incorrect timestamps
-  * Layout issues or overflow
-  * Buttons too close together
-  * Missing hover states
-  * Console errors
+```python
+manager.update_task_status(task_id, "In Progress", "Found regression: [describe issue]")
+manager.export_to_markdown()
+```
+- Fix the issue BEFORE moving to new tasks
+- This includes UI bugs like poor contrast, layout issues, console errors, etc.
 
-### STEP 5: SELECT NEXT ISSUE TO WORK ON
+### STEP 6: SELECT NEXT TASK TO WORK ON
 
-Use `mcp__linear__list_issues` with the project ID from `.linear_project.json`:
-- Filter by `status`: "Todo"
-- Sort by priority (1=urgent is highest)
-- `limit`: 5
+```python
+from pathlib import Path
+from checklist_manager import ChecklistManager
 
-Review the highest-priority unstarted issues and select ONE to work on.
+manager = ChecklistManager(Path.cwd())
 
-### STEP 6: CLAIM THE ISSUE
+# Priority 1: Complete any in-progress task
+in_progress = manager.get_tasks_by_status("In Progress")
+if in_progress:
+    current_task = in_progress[0]
+else:
+    # Priority 2: Get next todo task
+    current_task = manager.get_next_task()
 
-Before starting work, use `mcp__linear__update_issue` to:
-- Set the issue's `status` to "In Progress"
+if current_task:
+    print(f"Working on: #{current_task['id']} - {current_task['title']}")
+    print(f"Description: {current_task['description']}")
+else:
+    print("All tasks complete!")
+```
 
-This signals to any other agents (or humans watching) that this issue is being worked on.
+### STEP 7: CLAIM THE TASK
 
-### STEP 7: IMPLEMENT THE FEATURE
+```python
+# Mark task as in progress
+manager.update_task_status(current_task['id'], "In Progress")
+manager.export_to_markdown()  # Updates CHECKLIST.md
 
-Read the issue description for test steps and implement accordingly:
+print(f"✓ Task #{current_task['id']} marked as In Progress")
+print("✓ CHECKLIST.md updated")
+```
+
+### STEP 8: IMPLEMENT THE FEATURE
+
+Read the task description and implement accordingly:
 
 1. Write the code (frontend and/or backend as needed)
-2. Test manually using browser automation (see Step 8)
+2. Test manually using browser automation (see Step 9)
 3. Fix any issues discovered
 4. Verify the feature works end-to-end
 
-### STEP 8: VERIFY WITH BROWSER AUTOMATION
+### STEP 9: VERIFY WITH BROWSER AUTOMATION
 
-**CRITICAL:** You MUST verify features through the actual UI.
+**CRITICAL:** You MUST verify features through the actual UI using Playwright.
 
-Use browser automation tools:
-- `mcp__puppeteer__puppeteer_navigate` - Start browser and go to URL
-- `mcp__puppeteer__puppeteer_screenshot` - Capture screenshot
-- `mcp__puppeteer__puppeteer_click` - Click elements
-- `mcp__puppeteer__puppeteer_fill` - Fill form inputs
+Use Playwright MCP tools:
+- `mcp__playwright__browser_navigate` - Go to URL
+- `mcp__playwright__browser_snapshot` - Get page accessibility tree
+- `mcp__playwright__browser_take_screenshot` - Capture screenshot
+- `mcp__playwright__browser_click` - Click elements
+- `mcp__playwright__browser_type` - Type into inputs
+- `mcp__playwright__browser_fill_form` - Fill multiple form fields
+- `mcp__playwright__browser_wait_for` - Wait for elements/text
 
 **DO:**
 - Test through the UI with clicks and keyboard input
 - Take screenshots to verify visual appearance
-- Check for console errors in browser
+- Check for console errors
 - Verify complete user workflows end-to-end
 
 **DON'T:**
-- Only test with curl commands (backend testing alone is insufficient)
-- Use JavaScript evaluation to bypass UI (no shortcuts)
+- Only test with curl commands (insufficient)
 - Skip visual verification
-- Mark issues Done without thorough verification
+- Mark tasks Done without thorough verification
 
-### STEP 9: UPDATE LINEAR ISSUE (CAREFULLY!)
+### STEP 10: UPDATE CHECKLIST
 
 After thorough verification:
 
-1. **Add implementation comment** using `mcp__linear__create_comment`:
-   ```markdown
-   ## Implementation Complete
+```python
+from pathlib import Path
+from checklist_manager import ChecklistManager
 
-   ### Changes Made
-   - [List of files changed]
-   - [Key implementation details]
+manager = ChecklistManager(Path.cwd())
 
-   ### Verification
-   - Tested via Puppeteer browser automation
-   - Screenshots captured
-   - All test steps from issue description verified
+# Add implementation notes
+implementation_note = """
+Implementation complete:
+- Files changed: [list key files]
+- Tested via Playwright browser automation
+- Screenshots captured, no visual issues
+- No console errors
+- Commit: [git commit hash]
+"""
 
-   ### Git Commit
-   [commit hash and message]
-   ```
+manager.update_task_status(
+    current_task['id'],
+    "Done",
+    implementation_note
+)
+manager.export_to_markdown()  # Updates CHECKLIST.md
 
-2. **Update status** using `mcp__linear__update_issue`:
-   - Set `status` to "Done"
+print(f"✓ Task #{current_task['id']} marked as Done")
+print("✓ CHECKLIST.md updated")
+```
 
-**ONLY update status to Done AFTER:**
-- All test steps in the issue description pass
+**ONLY mark Done AFTER:**
+- Feature fully implemented and working
 - Visual verification via screenshots
 - No console errors
 - Code committed to git
 
-### STEP 10: COMMIT YOUR PROGRESS
+### STEP 11: COMMIT YOUR PROGRESS
 
-Make a descriptive git commit:
 ```bash
 git add .
-git commit -m "Implement [feature name]
+git commit -m "Implement [task title]
 
-- Added [specific changes]
-- Tested with browser automation
-- Linear issue: [issue identifier]
+- Task #[id]: [task title]
+- [Specific changes made]
+- Tested with Playwright browser automation
+- All tests passing
 "
 ```
 
-### STEP 11: UPDATE META ISSUE
+### STEP 12: ADD SESSION LOG
 
-Add a comment to the "[META] Project Progress Tracker" issue with session summary:
+```python
+manager = ChecklistManager(Path.cwd())
+summary = manager.get_progress_summary()
 
-```markdown
-## Session Complete - [Brief description]
+session_summary = f"""Session Complete
 
-### Completed This Session
-- [Issue title]: [Brief summary of implementation]
+Completed This Session:
+- Task #{current_task['id']}: {current_task['title']}
 
-### Current Progress
-- X issues Done
-- Y issues In Progress
-- Z issues remaining in Todo
+Current Progress:
+- {summary['Done']} tasks Done
+- {summary['In Progress']} tasks In Progress
+- {summary['Todo']} tasks Todo
 
-### Verification Status
+Verification Status:
 - Ran verification tests on [feature names]
-- All previously completed features still working: [Yes/No]
+- All previously completed features still working
 
-### Notes for Next Session
-- [Any important context]
-- [Recommendations for what to work on next]
-- [Any blockers or concerns]
+Notes for Next Session:
+- [Any important context or recommendations]
+"""
+
+manager.add_session_log(session_num=[current_session_number], summary=session_summary)
+manager.export_to_markdown()
+
+print("✓ Session log added")
+print("✓ CHECKLIST.md updated")
 ```
 
-### STEP 12: END SESSION CLEANLY
+### STEP 13: END SESSION CLEANLY
 
 Before context fills up:
 1. Commit all working code
-2. If working on an issue you can't complete:
-   - Add a comment explaining progress and what's left
-   - Keep status as "In Progress" (don't revert to Todo)
-3. Update META issue with session summary
-4. Ensure no uncommitted changes
+2. If working on a task you can't complete:
+   ```python
+   manager.add_task_note(task_id, "Partial progress: [what's done, what's left]")
+   # Keep status as "In Progress"
+   manager.export_to_markdown()
+   ```
+3. Ensure `.project_checklist.json` and `CHECKLIST.md` are up to date
+4. Commit: `git add . && git commit -m "Session [X]: [summary]"`
 5. Leave app in working state (no broken features)
 
 ---
 
-## LINEAR WORKFLOW RULES
+## CHECKLIST WORKFLOW RULES
 
 **Status Transitions:**
 - Todo → In Progress (when you start working)
 - In Progress → Done (when verified complete)
 - Done → In Progress (only if regression found)
 
-**Comments Are Your Memory:**
-- Every implementation gets a detailed comment
-- Session handoffs happen via META issue comments
-- Comments are permanent - future agents will read them
+**Always Update CHECKLIST.md:**
+After any status change, run:
+```python
+manager.export_to_markdown()
+```
+This keeps the markdown file in sync with the JSON data.
 
 **NEVER:**
-- Delete or archive issues
-- Modify issue descriptions or test steps
-- Work on issues already "In Progress" by someone else
-- Mark "Done" without verification
-- Leave issues "In Progress" when switching to another issue
+- Work on multiple tasks simultaneously
+- Mark "Done" without verification via Playwright
+- Skip updating CHECKLIST.md
 
 ---
 
 ## TESTING REQUIREMENTS
 
-**ALL testing must use browser automation tools.**
+**ALL testing must use Playwright browser automation tools.**
 
-Available Puppeteer tools:
-- `mcp__puppeteer__puppeteer_navigate` - Go to URL
-- `mcp__puppeteer__puppeteer_screenshot` - Capture screenshot
-- `mcp__puppeteer__puppeteer_click` - Click elements
-- `mcp__puppeteer__puppeteer_fill` - Fill form inputs
-- `mcp__puppeteer__puppeteer_select` - Select dropdown options
-- `mcp__puppeteer__puppeteer_hover` - Hover over elements
-
-Test like a human user with mouse and keyboard. Don't take shortcuts.
+Test like a human user with mouse and keyboard. Don't take shortcuts with direct API calls.
 
 ---
 
 ## SESSION PACING
 
-**How many issues should you complete per session?**
+**How many tasks should you complete per session?**
 
-This depends on the project phase:
+**Early phase (< 20% Done):** You may complete multiple tasks per session when:
+- Setting up infrastructure that unlocks many tasks at once
+- Fixing build issues
+- Completing quick setup tasks
 
-**Early phase (< 20% Done):** You may complete multiple issues per session when:
-- Setting up infrastructure/scaffolding that unlocks many issues at once
-- Fixing build issues that were blocking progress
-- Auditing existing code and marking already-implemented features as Done
-
-**Mid/Late phase (> 20% Done):** Slow down to **1-2 issues per session**:
-- Each feature now requires focused implementation and testing
+**Mid/Late phase (> 20% Done):** Slow down to **1-2 tasks per session**:
+- Each feature requires focused implementation and testing
 - Quality matters more than quantity
 - Clean handoffs are critical
 
-**After completing an issue, ask yourself:**
-1. Is the app in a stable, working state right now?
-2. Have I been working for a while? (You can't measure this precisely, but use judgment)
-3. Would this be a good stopping point for handoff?
+**After completing a task, ask yourself:**
+1. Is the app in a stable, working state?
+2. Have I been working for a while?
+3. Would this be a good stopping point?
 
-If yes to all three → proceed to Step 11 (session summary) and end cleanly.
-If no → you may continue to the next issue, but **commit first** and stay aware.
+If yes to all three → proceed to Step 12 (session log) and end cleanly.
 
-**Golden rule:** It's always better to end a session cleanly with good handoff notes
-than to start another issue and risk running out of context mid-implementation.
+**Golden rule:** Better to end cleanly with good notes than to start another task
+and risk running out of context mid-implementation.
 
 ---
 
 ## IMPORTANT REMINDERS
 
-**Your Goal:** Production-quality application with all Linear issues Done
+**Your Goal:** Production-quality application with all tasks completed
 
 **This Session's Goal:** Make meaningful progress with clean handoff
 
-**Priority:** Fix regressions before implementing new features
+**Priority:** Fix regressions before implementing new tasks
 
 **Quality Bar:**
 - Zero console errors
@@ -296,8 +339,8 @@ than to start another issue and risk running out of context mid-implementation.
 - All features work end-to-end through the UI
 - Fast, responsive, professional
 
-**Context is finite.** You cannot monitor your context usage, so err on the side
-of ending sessions early with good handoff notes. The next agent will continue.
+**Context is finite.** Err on the side of ending sessions early with good notes.
+The next agent will continue.
 
 ---
 

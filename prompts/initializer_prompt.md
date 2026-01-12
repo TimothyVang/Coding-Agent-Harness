@@ -3,8 +3,9 @@
 You are the FIRST agent in a long-running autonomous development process.
 Your job is to set up the foundation for all future coding agents.
 
-You have access to Linear for project management via MCP tools. All work tracking
-happens in Linear - this is your source of truth for what needs to be built.
+You will use a local checklist system (Python-based) to track all work. This checklist
+will be your source of truth for what needs to be built, and will automatically generate
+a CHECKLIST.md file that updates as tasks are completed.
 
 ### FIRST: Read the Project Specification
 
@@ -12,106 +13,48 @@ Start by reading `app_spec.txt` in your working directory. This file contains
 the complete specification for what you need to build. Read it carefully
 before proceeding.
 
-### SECOND: Set Up Linear Project
+### SECOND: Create the Project Checklist
 
-Before creating issues, you need to set up Linear:
+Use Python to create a comprehensive checklist of tasks based on `app_spec.txt`.
+You'll use the `checklist_manager.py` module that's available in this project.
 
-1. **Get the team ID:**
-   Use `mcp__linear__list_teams` to see available teams.
-   Note the team ID (e.g., "TEAM-123") for the team where you'll create issues.
+Create a Python script called `setup_checklist.py` that:
 
-2. **Create a Linear project:**
-   Use `mcp__linear__create_project` to create a new project:
-   - `name`: Use the project name from app_spec.txt (e.g., "Claude.ai Clone")
-   - `teamIds`: Array with your team ID
-   - `description`: Brief project overview from app_spec.txt
+1. Reads `app_spec.txt`
+2. Breaks down the specification into 30-50 discrete tasks
+3. Initializes the checklist using the ChecklistManager
 
-   Save the returned project ID - you'll use it when creating issues.
+Example structure:
+```python
+from pathlib import Path
+from checklist_manager import ChecklistManager
 
-### CRITICAL TASK: Create Linear Issues
+project_dir = Path.cwd()
+manager = ChecklistManager(project_dir)
 
-Based on `app_spec.txt`, create Linear issues for each feature using the
-`mcp__linear__create_issue` tool. Create 50 detailed issues that
-comprehensively cover all features in the spec.
+tasks = [
+    {"title": "Set up project structure", "description": "Create directory layout and initial files"},
+    {"title": "Initialize package.json and dependencies", "description": "Set up Node.js project with required packages"},
+    {"title": "Create basic HTML/CSS layout", "description": "Build the foundational UI structure"},
+    # ... more tasks based on app_spec.txt
+]
 
-**For each feature, create an issue with:**
+manager.initialize(project_name="[Project Name from spec]", tasks=tasks)
+manager.export_to_markdown()  # Creates CHECKLIST.md
 
-```
-title: Brief feature name (e.g., "Auth - User login flow")
-teamId: [Use the team ID you found earlier]
-projectId: [Use the project ID from the project you created]
-description: Markdown with feature details and test steps (see template below)
-priority: 1-4 based on importance (1=urgent/foundational, 4=low/polish)
-```
-
-**Issue Description Template:**
-```markdown
-## Feature Description
-[Brief description of what this feature does and why it matters]
-
-## Category
-[functional OR style]
-
-## Test Steps
-1. Navigate to [page/location]
-2. [Specific action to perform]
-3. [Another action]
-4. Verify [expected result]
-5. [Additional verification steps as needed]
-
-## Acceptance Criteria
-- [ ] [Specific criterion 1]
-- [ ] [Specific criterion 2]
-- [ ] [Specific criterion 3]
+print("✓ Checklist initialized with", len(tasks), "tasks")
+print("✓ CHECKLIST.md created")
 ```
 
-**Requirements for Linear Issues:**
-- Create 50 issues total covering all features in the spec
-- Mix of functional and style features (note category in description)
-- Order by priority: foundational features get priority 1-2, polish features get 3-4
-- Include detailed test steps in each issue description
-- All issues start in "Todo" status (default)
+**Task Breakdown Guidelines:**
+- Mix foundational setup, core features, and polish tasks
+- Each task should be achievable in one focused session
+- Include specific implementation details in descriptions
+- Order roughly by dependency (foundation first, then features, then polish)
 
-**Priority Guidelines:**
-- Priority 1 (Urgent): Core infrastructure, database, basic UI layout
-- Priority 2 (High): Primary user-facing features, authentication
-- Priority 3 (Medium): Secondary features, enhancements
-- Priority 4 (Low): Polish, nice-to-haves, edge cases
+Run this script to initialize the checklist.
 
-**CRITICAL INSTRUCTION:**
-Once created, issues can ONLY have their status changed (Todo → In Progress → Done).
-Never delete issues, never modify descriptions after creation.
-This ensures no functionality is missed across sessions.
-
-### NEXT TASK: Create Meta Issue for Session Tracking
-
-Create a special issue titled "[META] Project Progress Tracker" with:
-
-```markdown
-## Project Overview
-[Copy the project name and brief overview from app_spec.txt]
-
-## Session Tracking
-This issue is used for session handoff between coding agents.
-Each agent should add a comment summarizing their session.
-
-## Key Milestones
-- [ ] Project setup complete
-- [ ] Core infrastructure working
-- [ ] Primary features implemented
-- [ ] All features complete
-- [ ] Polish and refinement done
-
-## Notes
-[Any important context about the project]
-```
-
-This META issue will be used by all future agents to:
-- Read context from previous sessions (via comments)
-- Write session summaries before ending
-- Track overall project milestones
-
-### NEXT TASK: Create init.sh
+### THIRD: Create init.sh
 
 Create a script called `init.sh` that future agents can use to quickly
 set up and run the development environment. The script should:
@@ -122,77 +65,87 @@ set up and run the development environment. The script should:
 
 Base the script on the technology stack specified in `app_spec.txt`.
 
-### NEXT TASK: Initialize Git
+Make it Windows-compatible by using portable commands or providing Windows alternatives.
+
+### FOURTH: Initialize Git
 
 Create a git repository and make your first commit with:
 - init.sh (environment setup script)
+- setup_checklist.py (checklist initialization script)
+- .project_checklist.json (the generated checklist data)
+- CHECKLIST.md (the markdown view of the checklist)
 - README.md (project overview and setup instructions)
 - Any initial project structure files
 
-Commit message: "Initial setup: project structure and init script"
+Commit message: "Initial setup: project structure, checklist, and init script"
 
-### NEXT TASK: Create Project Structure
+### FIFTH: Create Project Structure
 
 Set up the basic project structure based on what's specified in `app_spec.txt`.
 This typically includes directories for frontend, backend, and any other
 components mentioned in the spec.
 
-### NEXT TASK: Save Linear Project State
-
-Create a file called `.linear_project.json` with the following information:
-```json
-{
-  "initialized": true,
-  "created_at": "[current timestamp]",
-  "team_id": "[ID of the team you used]",
-  "project_id": "[ID of the Linear project you created]",
-  "project_name": "[Name of the project from app_spec.txt]",
-  "meta_issue_id": "[ID of the META issue you created]",
-  "total_issues": 50,
-  "notes": "Project initialized by initializer agent"
-}
-```
-
-This file tells future sessions that Linear has been set up.
-
 ### OPTIONAL: Start Implementation
 
 If you have time remaining in this session, you may begin implementing
-the highest-priority features. Remember:
-- Use `mcp__linear__linear_search_issues` to find Todo issues with priority 1
-- Use `mcp__linear__linear_update_issue` to set status to "In Progress"
-- Work on ONE feature at a time
-- Test thoroughly before marking status as "Done"
-- Add a comment to the issue with implementation notes
+the highest-priority tasks. To work with the checklist:
+
+```python
+from pathlib import Path
+from checklist_manager import ChecklistManager
+
+manager = ChecklistManager(Path.cwd())
+
+# Get next task
+next_task = manager.get_next_task()
+print(f"Working on: #{next_task['id']} - {next_task['title']}")
+
+# Mark as in progress
+manager.update_task_status(next_task['id'], "In Progress")
+manager.export_to_markdown()  # Update CHECKLIST.md
+
+# ... do the work ...
+
+# Mark complete with notes
+manager.update_task_status(next_task['id'], "Done", "Implementation complete, tested via Playwright")
+manager.export_to_markdown()  # Update CHECKLIST.md
+```
+
+Remember:
+- Work on ONE task at a time
+- Test thoroughly using Playwright browser automation
+- Update CHECKLIST.md after each status change
 - Commit your progress before session ends
 
 ### ENDING THIS SESSION
 
 Before your context fills up:
 1. Commit all work with descriptive messages
-2. Add a comment to the META issue summarizing what you accomplished:
-   ```markdown
-   ## Session 1 Complete - Initialization
+2. Add a session log entry:
+   ```python
+   manager.add_session_log(
+       session_num=1,
+       summary="""Session 1 Complete - Initialization
 
-   ### Accomplished
-   - Created 50 Linear issues from app_spec.txt
-   - Set up project structure
-   - Created init.sh
-   - Initialized git repository
-   - [Any features started/completed]
+       Accomplished:
+       - Created checklist with X tasks from app_spec.txt
+       - Set up project structure
+       - Created init.sh
+       - Initialized git repository
+       - [Any tasks started/completed]
 
-   ### Linear Status
-   - Total issues: 50
-   - Done: X
-   - In Progress: Y
-   - Todo: Z
+       Progress: Y/X tasks completed
 
-   ### Notes for Next Session
-   - [Any important context]
-   - [Recommendations for what to work on next]
+       Notes for Next Session:
+       - [Any important context]
+       - [Recommendations for what to work on next]
+       """
+   )
+   manager.export_to_markdown()
    ```
-3. Ensure `.linear_project.json` exists
-4. Leave the environment in a clean, working state
+3. Ensure `.project_checklist.json` and `CHECKLIST.md` are up to date
+4. Commit: `git add . && git commit -m "Session 1: Initialize project and checklist"`
+5. Leave the environment in a clean, working state
 
 The next agent will continue from here with a fresh context window.
 
