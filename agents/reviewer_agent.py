@@ -15,6 +15,8 @@ Responsibilities:
 """
 
 import asyncio
+import json
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Any
@@ -353,13 +355,23 @@ class ReviewerAgent(BaseAgent):
             print(f"[Reviewer] Found {len(patterns)} similar review patterns in memory")
             # Use patterns to guide review
 
-        # TODO: If Context7 client available, research best practices for the specific technology
+        # Research best practices for the specific technology using Context7
+        tech_query = self._detect_technology_from_task(title, task_details.get("description", ""))
+        if tech_query:
+            print(f"[{self.agent_id}] Researching {tech_query['library']} best practices via Context7...")
+            context7_result = await self._query_context7(tech_query["library"], tech_query["query"])
+            # Parse Context7 results and add to recommendations
+            best_practice_results["recommendations"].append({
+                "type": "best_practice",
+                "description": f"Context7 recommendations for {tech_query['library']}",
+                "details": context7_result
+            })
 
         return best_practice_results
 
     async def _check_security(self, task_details: Dict) -> Dict:
         """
-        Check for security vulnerabilities.
+        Check for security vulnerabilities using automated scanners.
 
         Security checks:
         - Input validation
@@ -367,7 +379,7 @@ class ReviewerAgent(BaseAgent):
         - XSS vulnerabilities
         - Authentication/authorization issues
         - Sensitive data exposure
-        - Dependency vulnerabilities
+        - Dependency vulnerabilities (Bandit, npm audit, Trivy)
         """
         security_results = {
             "vulnerabilities": [],
@@ -377,12 +389,201 @@ class ReviewerAgent(BaseAgent):
             "recommendations": []
         }
 
-        # TODO: Implement security scanning
-        # - Static analysis
-        # - Dependency audit
-        # - Common vulnerability patterns
+        project_path = Path(task_details.get("project_path", Path.cwd()))
+
+        # Run security scanners based on project type
+        vulnerabilities = []
+
+        # Python security scanning with Bandit
+        if (project_path / "requirements.txt").exists() or \
+           (project_path / "pyproject.toml").exists() or \
+           list(project_path.glob("**/*.py")):
+            print(f"[{self.agent_id}] Running Bandit security scan...")
+            bandit_results = await self._run_bandit_scan(project_path)
+            vulnerabilities.extend(bandit_results)
+
+        # Node.js dependency audit
+        if (project_path / "package.json").exists():
+            print(f"[{self.agent_id}] Running npm audit...")
+            npm_results = await self._run_npm_audit(project_path)
+            vulnerabilities.extend(npm_results)
+
+        # Container security scanning with Trivy
+        if (project_path / "Dockerfile").exists():
+            print(f"[{self.agent_id}] Running Trivy container scan...")
+            trivy_results = await self._run_trivy_scan(project_path)
+            vulnerabilities.extend(trivy_results)
+
+        # Process vulnerabilities
+        for vuln in vulnerabilities:
+            security_results["vulnerabilities"].append(vuln)
+
+            severity = vuln.get("severity", "LOW").upper()
+            if severity in ["HIGH", "CRITICAL"]:
+                security_results["severity_high"] += 1
+            elif severity == "MEDIUM":
+                security_results["severity_medium"] += 1
+            else:
+                security_results["severity_low"] += 1
+
+        # Generate recommendations
+        if security_results["severity_high"] > 0:
+            security_results["recommendations"].append(
+                f"CRITICAL: {security_results['severity_high']} high/critical severity vulnerabilities found. "
+                "These should be addressed immediately before deployment."
+            )
 
         return security_results
+
+    async def _run_bandit_scan(self, project_path: Path) -> List[Dict]:
+        """Run Bandit security scanner for Python code."""
+        vulnerabilities = []
+
+        try:
+            import subprocess
+            import json
+
+            # Run bandit with JSON output
+            result = subprocess.run(
+                ["bandit", "-r", str(project_path), "-f", "json", "-ll"],
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
+
+            # Parse JSON output
+            if result.stdout:
+                try:
+                    bandit_data = json.loads(result.stdout)
+                    for issue in bandit_data.get("results", []):
+                        vulnerabilities.append({
+                            "tool": "bandit",
+                            "severity": issue.get("issue_severity", "LOW"),
+                            "confidence": issue.get("issue_confidence", "LOW"),
+                            "title": issue.get("issue_text", "Security issue"),
+                            "file": issue.get("filename", "unknown"),
+                            "line": issue.get("line_number", 0),
+                            "code": issue.get("code", ""),
+                            "cwe": issue.get("issue_cwe", {}).get("id", "")
+                        })
+                except json.JSONDecodeError:
+                    print(f"[{self.agent_id}] Warning: Could not parse Bandit output")
+
+        except FileNotFoundError:
+            print(f"[{self.agent_id}] Bandit not installed - skipping Python security scan")
+            print(f"[{self.agent_id}] Install with: pip install bandit")
+        except subprocess.TimeoutExpired:
+            print(f"[{self.agent_id}] Bandit scan timed out")
+        except Exception as e:
+            print(f"[{self.agent_id}] Error running Bandit: {e}")
+
+        return vulnerabilities
+
+    async def _run_npm_audit(self, project_path: Path) -> List[Dict]:
+        """Run npm audit for Node.js dependencies."""
+        vulnerabilities = []
+
+        try:
+            import subprocess
+            import json
+
+            # Run npm audit with JSON output
+            result = subprocess.run(
+                ["npm", "audit", "--json"],
+                cwd=str(project_path),
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
+
+            # Parse JSON output
+            if result.stdout:
+                try:
+                    audit_data = json.loads(result.stdout)
+
+                    # npm audit v7+ format
+                    if "vulnerabilities" in audit_data:
+                        for pkg_name, vuln_data in audit_data.get("vulnerabilities", {}).items():
+                            vulnerabilities.append({
+                                "tool": "npm-audit",
+                                "severity": vuln_data.get("severity", "low").upper(),
+                                "title": f"Vulnerable dependency: {pkg_name}",
+                                "package": pkg_name,
+                                "via": vuln_data.get("via", []),
+                                "effects": vuln_data.get("effects", []),
+                                "range": vuln_data.get("range", "")
+                            })
+
+                    # npm audit v6 format
+                    elif "advisories" in audit_data:
+                        for advisory in audit_data.get("advisories", {}).values():
+                            vulnerabilities.append({
+                                "tool": "npm-audit",
+                                "severity": advisory.get("severity", "low").upper(),
+                                "title": advisory.get("title", "Vulnerability"),
+                                "package": advisory.get("module_name", "unknown"),
+                                "cve": advisory.get("cves", []),
+                                "url": advisory.get("url", "")
+                            })
+
+                except json.JSONDecodeError:
+                    print(f"[{self.agent_id}] Warning: Could not parse npm audit output")
+
+        except FileNotFoundError:
+            print(f"[{self.agent_id}] npm not installed - skipping Node.js dependency audit")
+        except subprocess.TimeoutExpired:
+            print(f"[{self.agent_id}] npm audit timed out")
+        except Exception as e:
+            print(f"[{self.agent_id}] Error running npm audit: {e}")
+
+        return vulnerabilities
+
+    async def _run_trivy_scan(self, project_path: Path) -> List[Dict]:
+        """Run Trivy container security scanner."""
+        vulnerabilities = []
+
+        try:
+            import subprocess
+            import json
+
+            # Run trivy filesystem scan with JSON output
+            result = subprocess.run(
+                ["trivy", "fs", "--format", "json", "--severity", "HIGH,CRITICAL", str(project_path)],
+                capture_output=True,
+                text=True,
+                timeout=180
+            )
+
+            # Parse JSON output
+            if result.stdout:
+                try:
+                    trivy_data = json.loads(result.stdout)
+
+                    for target in trivy_data.get("Results", []):
+                        for vuln in target.get("Vulnerabilities", []):
+                            vulnerabilities.append({
+                                "tool": "trivy",
+                                "severity": vuln.get("Severity", "UNKNOWN"),
+                                "title": vuln.get("Title", "Container vulnerability"),
+                                "vulnerability_id": vuln.get("VulnerabilityID", ""),
+                                "package": vuln.get("PkgName", ""),
+                                "installed_version": vuln.get("InstalledVersion", ""),
+                                "fixed_version": vuln.get("FixedVersion", ""),
+                                "description": vuln.get("Description", "")[:200]  # Truncate
+                            })
+
+                except json.JSONDecodeError:
+                    print(f"[{self.agent_id}] Warning: Could not parse Trivy output")
+
+        except FileNotFoundError:
+            print(f"[{self.agent_id}] Trivy not installed - skipping container security scan")
+            print(f"[{self.agent_id}] Install from: https://github.com/aquasecurity/trivy")
+        except subprocess.TimeoutExpired:
+            print(f"[{self.agent_id}] Trivy scan timed out")
+        except Exception as e:
+            print(f"[{self.agent_id}] Error running Trivy: {e}")
+
+        return vulnerabilities
 
     async def _check_performance(self, task_details: Dict) -> Dict:
         """
@@ -401,10 +602,61 @@ class ReviewerAgent(BaseAgent):
             "bottlenecks": []
         }
 
-        # TODO: Implement performance analysis
-        # - Complexity detection (O(n²) loops, etc.)
-        # - N+1 query detection
-        # - Large object allocations
+        project_path = Path(task_details.get("project_path", Path.cwd()))
+
+        # Static performance analysis patterns
+        performance_patterns = [
+            {
+                "pattern": r"for\s+\w+\s+in\s+\w+:\s+for\s+\w+\s+in\s+\w+:",
+                "issue": "Nested loops detected - potential O(n²) complexity",
+                "severity": "MEDIUM",
+                "suggestion": "Consider using more efficient data structures or algorithms"
+            },
+            {
+                "pattern": r"\.filter\(\)\.map\(\)",
+                "issue": "Chained filter/map operations",
+                "severity": "LOW",
+                "suggestion": "Consider combining into single operation for better performance"
+            },
+            {
+                "pattern": r"SELECT.*FROM.*WHERE.*IN\s*\(",
+                "issue": "Potential N+1 query pattern",
+                "severity": "HIGH",
+                "suggestion": "Consider using JOIN or batch loading"
+            }
+        ]
+
+        # Scan Python files for performance anti-patterns
+        python_files = list(project_path.glob("**/*.py"))
+        for py_file in python_files[:20]:  # Limit to 20 files for performance
+            try:
+                content = py_file.read_text(encoding='utf-8', errors='ignore')
+
+                # Check for nested loops
+                if "for " in content and content.count("for ") > 1:
+                    lines = content.split('\n')
+                    indent_stack = []
+                    for i, line in enumerate(lines):
+                        stripped = line.strip()
+                        if stripped.startswith("for "):
+                            indent = len(line) - len(line.lstrip())
+                            if indent_stack and indent > indent_stack[-1]:
+                                performance_results["issues"].append({
+                                    "file": str(py_file.relative_to(project_path)),
+                                    "line": i + 1,
+                                    "issue": "Nested loop detected - potential O(n²) complexity",
+                                    "severity": "MEDIUM"
+                                })
+                            indent_stack.append(indent)
+
+            except Exception as e:
+                continue
+
+        # Add general optimization recommendations
+        if not performance_results["issues"]:
+            performance_results["optimizations"].append(
+                "No obvious performance issues detected in static analysis"
+            )
 
         return performance_results
 
@@ -484,6 +736,43 @@ class ReviewerAgent(BaseAgent):
         report_lines.append(f"*Generated by {self.agent_id} at {datetime.now().isoformat()}*")
 
         return "\n".join(report_lines)
+
+    def _detect_technology_from_task(self, title: str, description: str) -> Optional[Dict]:
+        """
+        Detect technology/framework from task to research best practices.
+
+        Args:
+            title: Task title
+            description: Task description
+
+        Returns:
+            Dict with library and query for Context7, or None
+        """
+        combined = (title + " " + description).lower()
+
+        # Detect technologies
+        if "react" in combined:
+            return {"library": "react", "query": "React best practices and common pitfalls"}
+        elif "vue" in combined:
+            return {"library": "vue", "query": "Vue.js best practices and security"}
+        elif "angular" in combined:
+            return {"library": "angular", "query": "Angular best practices"}
+        elif "node" in combined or "express" in combined:
+            return {"library": "express", "query": "Node.js and Express security best practices"}
+        elif "django" in combined:
+            return {"library": "django", "query": "Django security and best practices"}
+        elif "flask" in combined:
+            return {"library": "flask", "query": "Flask security best practices"}
+        elif "fastapi" in combined:
+            return {"library": "fastapi", "query": "FastAPI best practices and security"}
+        elif "authentication" in combined or "auth" in combined:
+            return {"library": "security", "query": "Authentication and authorization best practices"}
+        elif "api" in combined:
+            return {"library": "rest-api", "query": "REST API security and best practices"}
+        elif "database" in combined or "sql" in combined:
+            return {"library": "database-security", "query": "Database security and SQL injection prevention"}
+
+        return None
 
     def get_system_prompt(self) -> str:
         """Get system prompt for the Reviewer Agent."""

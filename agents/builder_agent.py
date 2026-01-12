@@ -193,8 +193,13 @@ class BuilderAgent(BaseAgent):
             for mistake in mistakes[:3]:
                 notes.append(f"- {mistake['title']}: {mistake['solution']}")
 
-        # TODO: If Context7 client available, query for library-specific docs
-        # For now, just use memory
+        # Query Context7 for library-specific documentation and best practices
+        library_query = self._detect_library_from_task(title, description)
+        if library_query:
+            print(f"[{self.agent_id}] Researching {library_query['library']} via Context7...")
+            context7_result = await self._query_context7(library_query["library"], library_query["query"])
+            notes.append("\n## Context7 Documentation")
+            notes.append(context7_result)
 
         return "\n".join(notes) if notes else "No specific patterns found in memory."
 
@@ -332,6 +337,43 @@ Implemented successfully with:
             learned_from=str(implementation_result.get('task_id')),
             context=implementation_result
         )
+
+    def _detect_library_from_task(self, title: str, description: str) -> Optional[Dict]:
+        """
+        Detect relevant library/framework from task description.
+
+        Args:
+            title: Task title
+            description: Task description
+
+        Returns:
+            Dict with library and query, or None
+        """
+        combined = (title + " " + description).lower()
+
+        # Detect common libraries and frameworks
+        if "react" in combined:
+            return {"library": "react", "query": f"How to {title}"}
+        elif "vue" in combined:
+            return {"library": "vue", "query": f"Best practices for {title}"}
+        elif "angular" in combined:
+            return {"library": "angular", "query": f"Implementation guide for {title}"}
+        elif "express" in combined or "node" in combined:
+            return {"library": "express", "query": f"How to {title}"}
+        elif "django" in combined:
+            return {"library": "django", "query": f"Django best practices for {title}"}
+        elif "flask" in combined:
+            return {"library": "flask", "query": f"Flask patterns for {title}"}
+        elif "fastapi" in combined:
+            return {"library": "fastapi", "query": f"FastAPI implementation for {title}"}
+        elif "authentication" in combined or "auth" in combined:
+            return {"library": "authentication", "query": "Authentication best practices and security"}
+        elif "testing" in combined or "test" in combined:
+            return {"library": "testing", "query": f"Testing strategies for {title}"}
+        elif "api" in combined:
+            return {"library": "rest-api", "query": "RESTful API best practices"}
+
+        return None
 
     def get_system_prompt(self) -> str:
         """

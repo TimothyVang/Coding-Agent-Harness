@@ -28,7 +28,8 @@ from core.agent_memory import AgentMemory
 from agents import (
     BaseAgent, ArchitectAgent, BuilderAgent, TestGeneratorAgent,
     VerifierAgent, ReviewerAgent, DevOpsAgent, DocumentationAgent,
-    ReporterAgent, AnalyticsAgent
+    ReporterAgent, AnalyticsAgent, RefactorAgent, DatabaseAgent,
+    UIDesignAgent
 )
 from client import create_client
 
@@ -63,8 +64,9 @@ class AgentOrchestrator:
         self.agents: Dict[str, BaseAgent] = {}
         self.agent_types_available = [
             "architect", "builder", "test_generator", "verifier", "reviewer",
-            "devops", "documentation", "reporter", "analytics"
-        ]  # All 9 agents implemented!
+            "devops", "documentation", "reporter", "analytics", "refactor",
+            "database", "ui_design"
+        ]  # All 12 agents implemented! 🎉
 
         # Orchestrator state
         self.running = False
@@ -230,8 +232,41 @@ class AgentOrchestrator:
         self.agents["analytics-001"] = analytics
         print(f"[Orchestrator] Created agent: analytics-001 (type: analytics)")
 
+        # Refactor agents - for code quality and refactoring
+        refactor = RefactorAgent(
+            agent_id="refactor-001",
+            config=self.config,
+            message_bus=self.message_bus,
+            claude_client=None
+        )
+        await refactor.initialize()
+        self.agents["refactor-001"] = refactor
+        print(f"[Orchestrator] Created agent: refactor-001 (type: refactor)")
+
+        # Database agents - for schema design and optimization
+        database = DatabaseAgent(
+            agent_id="database-001",
+            config=self.config,
+            message_bus=self.message_bus,
+            claude_client=None
+        )
+        await database.initialize()
+        self.agents["database-001"] = database
+        print(f"[Orchestrator] Created agent: database-001 (type: database)")
+
+        # UI Design agents - for UI/UX and accessibility
+        ui_design = UIDesignAgent(
+            agent_id="uidesign-001",
+            config=self.config,
+            message_bus=self.message_bus,
+            claude_client=None
+        )
+        await ui_design.initialize()
+        self.agents["uidesign-001"] = ui_design
+        print(f"[Orchestrator] Created agent: uidesign-001 (type: ui_design)")
+
         print(f"[Orchestrator] Agent pool initialized with {len(self.agents)} agents")
-        print("[Orchestrator] All 9 specialized agent types ready!")
+        print("[Orchestrator] All 12 specialized agent types ready!")
 
     async def _task_processor(self):
         """

@@ -386,6 +386,61 @@ class BaseAgent:
         print(f"  Weaknesses: {len(weaknesses)}")
         print(f"  New goals: {len(goals)}")
 
+    async def _query_context7(self, library_name: str, query: str) -> str:
+        """
+        Query Context7 for library documentation and best practices.
+
+        This helper method enables agents to research libraries and patterns
+        before implementation. Results are cached in agent memory.
+
+        Args:
+            library_name: Name of the library/framework to research
+            query: Specific question or topic to research
+
+        Returns:
+            Formatted documentation string from Context7
+
+        Note:
+            Requires Context7 MCP server to be configured and CONTEXT7_API_KEY set
+        """
+        # Check if Context7 results are cached in memory
+        cache_key = f"context7_{library_name}_{query[:50]}"
+        cached = self.memory.data.get("context7_cache", {}).get(cache_key)
+
+        if cached:
+            print(f"[{self.agent_id}] Using cached Context7 result for {library_name}")
+            return cached
+
+        try:
+            # Context7 MCP tools should be available through self.client
+            # This is a placeholder for the actual MCP integration
+            # In practice, the agent will use Context7 MCP tools directly
+
+            # For now, we'll add a TODO marker for actual implementation
+            result = f"""
+# Context7 Research: {library_name}
+
+Query: {query}
+
+Note: Context7 integration pending. Agent should use Context7 MCP tools:
+1. mcp__context7__resolve-library-id - to get library ID
+2. mcp__context7__query-docs - to query documentation
+
+This will be implemented when Claude client is available with MCP tools.
+"""
+
+            # Cache the result
+            if "context7_cache" not in self.memory.data:
+                self.memory.data["context7_cache"] = {}
+            self.memory.data["context7_cache"][cache_key] = result
+            self.memory.save()
+
+            return result
+
+        except Exception as e:
+            print(f"[{self.agent_id}] Context7 query failed: {e}")
+            return f"Context7 unavailable. Error: {e}"
+
     def get_system_prompt(self) -> str:
         """
         Get agent-specific system prompt.
@@ -457,6 +512,306 @@ Learn from your experiences and continuously improve your performance.
                 )
 
         # Subclasses can handle additional message types
+
+    async def _analyze_codebase(self, project_path: Path) -> Dict:
+        """
+        Analyze codebase structure, patterns, and metrics.
+
+        This helper method provides comprehensive codebase analysis for agents
+        that need to understand code structure (RefactorAgent, DatabaseAgent, etc.)
+
+        Args:
+            project_path: Path to project directory
+
+        Returns:
+            Dict containing codebase analysis:
+            - language: Primary language
+            - framework: Detected framework
+            - file_count: Total files analyzed
+            - lines_of_code: Total LOC
+            - complexity_score: Average complexity
+            - patterns: Detected patterns
+            - structure: Directory structure summary
+        """
+        analysis = {
+            "language": "unknown",
+            "framework": "unknown",
+            "file_count": 0,
+            "lines_of_code": 0,
+            "complexity_score": 0.0,
+            "patterns": [],
+            "structure": {},
+            "dependencies": []
+        }
+
+        try:
+            # Detect language and framework
+            if (project_path / "package.json").exists():
+                analysis["language"] = "javascript/typescript"
+                import json
+                try:
+                    pkg_data = json.loads((project_path / "package.json").read_text(encoding='utf-8'))
+                    deps = {**pkg_data.get("dependencies", {}), **pkg_data.get("devDependencies", {})}
+                    analysis["dependencies"] = list(deps.keys())
+
+                    if "react" in deps:
+                        analysis["framework"] = "react"
+                    elif "vue" in deps:
+                        analysis["framework"] = "vue"
+                    elif "next" in deps:
+                        analysis["framework"] = "nextjs"
+                    elif "express" in deps:
+                        analysis["framework"] = "express"
+                except:
+                    pass
+
+            elif (project_path / "requirements.txt").exists() or (project_path / "pyproject.toml").exists():
+                analysis["language"] = "python"
+
+                if (project_path / "requirements.txt").exists():
+                    req_content = (project_path / "requirements.txt").read_text(encoding='utf-8')
+                    analysis["dependencies"] = [line.split('==')[0].split('>=')[0].strip()
+                                               for line in req_content.split('\n') if line.strip()]
+
+                    if "django" in req_content.lower():
+                        analysis["framework"] = "django"
+                    elif "flask" in req_content.lower():
+                        analysis["framework"] = "flask"
+                    elif "fastapi" in req_content.lower():
+                        analysis["framework"] = "fastapi"
+
+            elif (project_path / "go.mod").exists():
+                analysis["language"] = "go"
+
+            # Count files and lines of code
+            code_extensions = {
+                '.py', '.js', '.ts', '.jsx', '.tsx', '.go', '.java', '.cpp', '.c',
+                '.rb', '.php', '.rs', '.swift', '.kt', '.scala'
+            }
+
+            total_lines = 0
+            file_count = 0
+
+            for ext in code_extensions:
+                files = list(project_path.rglob(f"*{ext}"))
+                file_count += len(files)
+
+                for file_path in files[:100]:  # Limit to 100 files for performance
+                    try:
+                        content = file_path.read_text(encoding='utf-8', errors='ignore')
+                        lines = [line.strip() for line in content.split('\n') if line.strip()]
+                        total_lines += len(lines)
+                    except:
+                        pass
+
+            analysis["file_count"] = file_count
+            analysis["lines_of_code"] = total_lines
+
+            # Basic complexity estimation (lines per file)
+            if file_count > 0:
+                analysis["complexity_score"] = total_lines / file_count
+
+            # Analyze directory structure
+            structure = {}
+            for item in project_path.iterdir():
+                if item.is_dir() and not item.name.startswith('.'):
+                    structure[item.name] = len(list(item.rglob('*')))
+
+            analysis["structure"] = structure
+
+        except Exception as e:
+            print(f"[{self.agent_id}] Error analyzing codebase: {e}")
+            analysis["error"] = str(e)
+
+        return analysis
+
+    async def _detect_patterns(self, code: str, language: str = "python") -> list[Dict]:
+        """
+        Detect code patterns and anti-patterns in code snippet.
+
+        Useful for RefactorAgent, ReviewerAgent, and code quality analysis.
+
+        Args:
+            code: Code snippet to analyze
+            language: Programming language (python, javascript, etc.)
+
+        Returns:
+            List of detected patterns, each containing:
+            - type: 'pattern' or 'anti-pattern'
+            - name: Pattern name
+            - description: What was detected
+            - severity: LOW, MEDIUM, HIGH
+            - line: Line number if applicable
+        """
+        patterns = []
+        lines = code.split('\n')
+
+        try:
+            if language.lower() in ["python", "py"]:
+                # Python-specific pattern detection
+
+                # Long functions (more than 50 lines)
+                if len(lines) > 50:
+                    patterns.append({
+                        "type": "anti-pattern",
+                        "name": "Long Function",
+                        "description": f"Function has {len(lines)} lines. Consider breaking into smaller functions.",
+                        "severity": "MEDIUM",
+                        "line": 1
+                    })
+
+                # Nested loops (potential O(n²) complexity)
+                for i, line in enumerate(lines, 1):
+                    if 'for ' in line or 'while ' in line:
+                        indent = len(line) - len(line.lstrip())
+                        # Check if there's another loop within next lines with higher indent
+                        for j in range(i, min(i + 20, len(lines))):
+                            next_line = lines[j]
+                            next_indent = len(next_line) - len(next_line.lstrip())
+                            if next_indent > indent and ('for ' in next_line or 'while ' in next_line):
+                                patterns.append({
+                                    "type": "anti-pattern",
+                                    "name": "Nested Loop",
+                                    "description": "Nested loops detected. Consider optimization.",
+                                    "severity": "MEDIUM",
+                                    "line": i
+                                })
+                                break
+
+                # Multiple return statements
+                return_count = sum(1 for line in lines if 'return ' in line)
+                if return_count > 5:
+                    patterns.append({
+                        "type": "anti-pattern",
+                        "name": "Multiple Returns",
+                        "description": f"{return_count} return statements. Consider simplifying logic.",
+                        "severity": "LOW",
+                        "line": 0
+                    })
+
+                # TODO/FIXME comments
+                for i, line in enumerate(lines, 1):
+                    if 'TODO' in line or 'FIXME' in line:
+                        patterns.append({
+                            "type": "anti-pattern",
+                            "name": "Technical Debt",
+                            "description": "TODO/FIXME comment found.",
+                            "severity": "LOW",
+                            "line": i
+                        })
+
+            elif language.lower() in ["javascript", "js", "typescript", "ts"]:
+                # JavaScript-specific patterns
+
+                # Console.log in production code
+                for i, line in enumerate(lines, 1):
+                    if 'console.log' in line and 'debug' not in line.lower():
+                        patterns.append({
+                            "type": "anti-pattern",
+                            "name": "Debug Statement",
+                            "description": "console.log found. Remove before production.",
+                            "severity": "LOW",
+                            "line": i
+                        })
+
+                # Callback hell (more than 3 nested callbacks)
+                max_indent = max((len(line) - len(line.lstrip())) // 2 for line in lines if line.strip())
+                if max_indent > 6:
+                    patterns.append({
+                        "type": "anti-pattern",
+                        "name": "Deep Nesting",
+                        "description": f"Deep nesting detected (level {max_indent}). Consider async/await.",
+                        "severity": "HIGH",
+                        "line": 0
+                    })
+
+        except Exception as e:
+            print(f"[{self.agent_id}] Error detecting patterns: {e}")
+
+        return patterns
+
+    async def _generate_recommendations(self, issues: list[Dict], context: Dict = None) -> list[Dict]:
+        """
+        Generate prioritized recommendations from detected issues.
+
+        Takes a list of issues (from security scans, code analysis, etc.) and
+        generates actionable, prioritized recommendations.
+
+        Args:
+            issues: List of issues, each containing severity, type, description
+            context: Optional context about the codebase/project
+
+        Returns:
+            List of recommendations, each containing:
+            - priority: HIGH, MEDIUM, LOW
+            - category: security, performance, quality, etc.
+            - title: Short recommendation title
+            - description: Detailed recommendation
+            - impact: Expected impact if implemented
+            - effort: Estimated effort (hours)
+        """
+        recommendations = []
+
+        try:
+            # Group issues by severity and category
+            high_severity = [i for i in issues if i.get('severity') == 'HIGH' or i.get('severity') == 'CRITICAL']
+            medium_severity = [i for i in issues if i.get('severity') == 'MEDIUM']
+            low_severity = [i for i in issues if i.get('severity') == 'LOW']
+
+            # Generate recommendations for high severity issues first
+            for issue in high_severity[:5]:  # Top 5 high severity
+                recommendations.append({
+                    "priority": "HIGH",
+                    "category": issue.get('type', 'quality'),
+                    "title": f"Fix: {issue.get('name', issue.get('title', 'Critical Issue'))}",
+                    "description": issue.get('description', issue.get('message', '')),
+                    "impact": "Prevents potential production issues",
+                    "effort": 2  # hours
+                })
+
+            # Group medium severity by category
+            security_issues = [i for i in medium_severity if 'security' in i.get('type', '').lower()]
+            performance_issues = [i for i in medium_severity if 'performance' in i.get('type', '').lower()]
+
+            if security_issues:
+                recommendations.append({
+                    "priority": "MEDIUM",
+                    "category": "security",
+                    "title": f"Address {len(security_issues)} Security Issues",
+                    "description": "Multiple security vulnerabilities detected. Review and patch.",
+                    "impact": "Improves application security posture",
+                    "effort": len(security_issues) * 0.5
+                })
+
+            if performance_issues:
+                recommendations.append({
+                    "priority": "MEDIUM",
+                    "category": "performance",
+                    "title": f"Optimize {len(performance_issues)} Performance Bottlenecks",
+                    "description": "Code optimization opportunities identified.",
+                    "impact": "Improves application performance",
+                    "effort": len(performance_issues) * 1
+                })
+
+            # Low priority cleanup
+            if low_severity:
+                recommendations.append({
+                    "priority": "LOW",
+                    "category": "quality",
+                    "title": "Code Quality Improvements",
+                    "description": f"{len(low_severity)} minor code quality issues. Good for tech debt sprint.",
+                    "impact": "Improves code maintainability",
+                    "effort": len(low_severity) * 0.25
+                })
+
+            # Sort by priority
+            priority_order = {"HIGH": 0, "MEDIUM": 1, "LOW": 2}
+            recommendations.sort(key=lambda x: priority_order[x["priority"]])
+
+        except Exception as e:
+            print(f"[{self.agent_id}] Error generating recommendations: {e}")
+
+        return recommendations
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} id={self.agent_id} type={self.agent_type} status={self.status}>"

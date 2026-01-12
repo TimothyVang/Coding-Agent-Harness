@@ -15,8 +15,11 @@ Agent Types:
 - DocumentationAgent: Documentation generation (✅ IMPLEMENTED)
 - ReporterAgent: Markdown report generation (✅ IMPLEMENTED)
 - AnalyticsAgent: Pattern analysis and insights (✅ IMPLEMENTED)
+- RefactorAgent: Code quality and refactoring (✅ IMPLEMENTED)
+- DatabaseAgent: Schema design and optimization (✅ IMPLEMENTED)
+- UIDesignAgent: UI/UX and accessibility (✅ IMPLEMENTED)
 
-All 9 specialized agents implemented!
+All 12 specialized agents implemented! 🎉
 """
 
 from .base_agent import BaseAgent
@@ -29,6 +32,9 @@ from .devops_agent import DevOpsAgent
 from .documentation_agent import DocumentationAgent
 from .reporter_agent import ReporterAgent
 from .analytics_agent import AnalyticsAgent
+from .refactor_agent import RefactorAgent
+from .database_agent import DatabaseAgent
+from .ui_design_agent import UIDesignAgent
 
 __all__ = [
     'BaseAgent',
@@ -41,4 +47,7 @@ __all__ = [
     'DocumentationAgent',
     'ReporterAgent',
     'AnalyticsAgent',
+    'RefactorAgent',
+    'DatabaseAgent',
+    'UIDesignAgent',
 ]

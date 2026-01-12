@@ -218,9 +218,13 @@ class TestGeneratorAgent(BaseAgent):
             for knowledge in testing_knowledge[:5]:
                 notes.append(f"- {knowledge}")
 
-        # TODO: If Context7 client available, research testing framework documentation
-        # For example: "How to write unit tests in Jest", "React Testing Library best practices"
-        # This would significantly improve test quality
+        # Research testing framework documentation using Context7
+        framework_query = self._detect_testing_framework(title, task_details.get("description", ""))
+        if framework_query:
+            print(f"[{self.agent_id}] Researching {framework_query['library']} testing practices via Context7...")
+            context7_result = await self._query_context7(framework_query["library"], framework_query["query"])
+            notes.append("\n## Testing Framework Documentation (Context7)")
+            notes.append(context7_result)
 
         if not notes:
             notes.append("## Default Testing Guidelines")
@@ -370,6 +374,41 @@ Please generate the {test_type} test files now.
                 lines.append(f"- ... and {len(generation_result['test_files_created']) - 10} more")
 
         return "\n".join(lines)
+
+    def _detect_testing_framework(self, title: str, description: str) -> Optional[Dict]:
+        """
+        Detect testing framework from task details.
+
+        Args:
+            title: Task title
+            description: Task description
+
+        Returns:
+            Dict with library and query for Context7, or None
+        """
+        combined = (title + " " + description).lower()
+
+        # Detect testing frameworks
+        if "jest" in combined or ("react" in combined and "test" in combined):
+            return {"library": "jest", "query": "Jest testing best practices and patterns"}
+        elif "vitest" in combined or "vite" in combined:
+            return {"library": "vitest", "query": "Vitest testing guide"}
+        elif "pytest" in combined or ("python" in combined and "test" in combined):
+            return {"library": "pytest", "query": "Pytest best practices and fixtures"}
+        elif "mocha" in combined or "chai" in combined:
+            return {"library": "mocha", "query": "Mocha and Chai testing patterns"}
+        elif "testing-library" in combined or "react testing library" in combined:
+            return {"library": "react-testing-library", "query": "React Testing Library best practices"}
+        elif "cypress" in combined or "e2e" in combined:
+            return {"library": "cypress", "query": "Cypress end-to-end testing best practices"}
+        elif "playwright" in combined:
+            return {"library": "playwright", "query": "Playwright testing patterns"}
+        elif "api" in combined and "test" in combined:
+            return {"library": "api-testing", "query": "API testing best practices"}
+        elif "unit" in combined or "test" in combined:
+            return {"library": "unit-testing", "query": "Unit testing best practices"}
+
+        return None
 
     def get_system_prompt(self) -> str:
         """

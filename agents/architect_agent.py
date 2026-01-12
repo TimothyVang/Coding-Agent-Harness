@@ -313,8 +313,13 @@ class ArchitectAgent(BaseAgent):
             for knowledge in arch_knowledge[:5]:
                 notes.append(f"- {knowledge}")
 
-        # TODO: Use Context7 to research specific architecture patterns
-        # For example: "Microservices architecture best practices", "React state management patterns"
+        # Use Context7 to research specific architecture patterns
+        context7_query = self._generate_architecture_query(title, requirements)
+        if context7_query:
+            print(f"[{self.agent_id}] Researching architecture patterns via Context7...")
+            context7_result = await self._query_context7(context7_query["library"], context7_query["query"])
+            notes.append("\n## Context7 Research")
+            notes.append(context7_result)
 
         # Add recommendations based on requirements
         if requirements.get("complexity") == "high":
@@ -621,6 +626,35 @@ class ArchitectAgent(BaseAgent):
         lines.append("4. Reviewer will review code quality")
 
         return "\n".join(lines)
+
+    def _generate_architecture_query(self, title: str, requirements: Dict) -> Optional[Dict]:
+        """
+        Generate Context7 query based on requirements.
+
+        Args:
+            title: Task title
+            requirements: Requirements analysis
+
+        Returns:
+            Dict with library and query, or None if no relevant query
+        """
+        combined_text = title.lower()
+        scope = requirements.get("scope", [])
+
+        # Determine what to research based on scope and keywords
+        if "react" in combined_text or "frontend" in scope:
+            return {"library": "react", "query": f"Best practices for {title}"}
+        elif "node" in combined_text or "express" in combined_text:
+            return {"library": "express", "query": f"Architecture patterns for {title}"}
+        elif "database" in combined_text or "backend" in scope:
+            return {"library": "postgresql", "query": f"Database design for {title}"}
+        elif "authentication" in combined_text:
+            return {"library": "passport", "query": "Authentication best practices"}
+        elif "api" in combined_text:
+            return {"library": "rest-api", "query": "RESTful API design patterns"}
+
+        # Default: research general architecture patterns
+        return {"library": "software-architecture", "query": f"Architecture patterns for {title}"}
 
     def get_system_prompt(self) -> str:
         """
