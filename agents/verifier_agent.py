@@ -44,7 +44,8 @@ class VerifierAgent(BaseAgent):
         agent_id: str,
         config: Dict,
         message_bus: Optional[MessageBus] = None,
-        claude_client: Optional[ClaudeSDKClient] = None
+        claude_client: Optional[ClaudeSDKClient] = None,
+        sandbox_manager=None
     ):
         """
         Initialize Verifier agent.
@@ -54,9 +55,11 @@ class VerifierAgent(BaseAgent):
             config: Configuration dict
             message_bus: Optional message bus for communication
             claude_client: Optional Claude SDK client for verification tasks
+            sandbox_manager: Optional E2BSandboxManager for test execution
         """
         super().__init__(agent_id, "verifier", config, message_bus)
         self.client = claude_client
+        self.sandbox_manager = sandbox_manager
 
         # Verification thresholds from config
         self.min_completion_threshold = config.get("min_completion_threshold", 95.0)
@@ -303,29 +306,49 @@ class VerifierAgent(BaseAgent):
         try:
             print(f"[{self.agent_id}] Running tests with {framework['name']}...")
 
-            # Execute test command
-            import subprocess
-            result = subprocess.run(
-                framework["command"],
-                cwd=str(project_path),
-                capture_output=True,
-                text=True,
-                timeout=300,  # 5 minute timeout
-                shell=True
-            )
+            test_command = " ".join(framework["command"]) if isinstance(framework["command"], list) else framework["command"]
+            test_results["command"] = test_command
 
-            test_results["command"] = " ".join(framework["command"]) if isinstance(framework["command"], list) else framework["command"]
-            test_results["output"] = result.stdout + result.stderr
+            # Use E2B sandbox if available, otherwise fallback to local execution
+            if self.sandbox_manager:
+                print(f"[{self.agent_id}] Using E2B sandbox for test execution")
+                e2b_result = await self.sandbox_manager.run_tests(
+                    project_path=project_path,
+                    test_command=test_command
+                )
 
-            # Parse output based on framework
-            parsed = self._parse_test_output(framework["name"], result.stdout, result.stderr)
-            test_results.update(parsed)
+                test_results["total"] = e2b_result.tests_passed + e2b_result.tests_failed
+                test_results["passed"] = e2b_result.tests_passed
+                test_results["failed"] = e2b_result.tests_failed
+                test_results["output"] = e2b_result.test_output
 
-            print(f"[{self.agent_id}] Tests completed: {test_results['total']} total, {test_results['passed']} passed, {test_results['failed']} failed")
+                # Add any test failures
+                if not e2b_result.success and e2b_result.error:
+                    test_results["failures"].append(e2b_result.error)
 
-        except subprocess.TimeoutExpired:
-            print(f"[{self.agent_id}] Test execution timed out after 5 minutes")
-            test_results["failures"].append("Test execution timed out")
+                print(f"[{self.agent_id}] E2B Tests completed: {test_results['total']} total, {test_results['passed']} passed, {test_results['failed']} failed")
+
+            else:
+                # Fallback to local subprocess execution
+                print(f"[{self.agent_id}] Using local subprocess for test execution")
+                import subprocess
+                result = subprocess.run(
+                    framework["command"],
+                    cwd=str(project_path),
+                    capture_output=True,
+                    text=True,
+                    timeout=300,  # 5 minute timeout
+                    shell=True
+                )
+
+                test_results["output"] = result.stdout + result.stderr
+
+                # Parse output based on framework
+                parsed = self._parse_test_output(framework["name"], result.stdout, result.stderr)
+                test_results.update(parsed)
+
+                print(f"[{self.agent_id}] Tests completed: {test_results['total']} total, {test_results['passed']} passed, {test_results['failed']} failed")
+
         except Exception as e:
             print(f"[{self.agent_id}] Test execution failed: {e}")
             test_results["failures"].append(f"Test execution error: {str(e)}")

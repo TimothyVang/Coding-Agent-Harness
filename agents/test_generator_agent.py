@@ -44,7 +44,8 @@ class TestGeneratorAgent(BaseAgent):
         agent_id: str,
         config: Dict,
         message_bus: Optional[MessageBus] = None,
-        claude_client: Optional[ClaudeSDKClient] = None
+        claude_client: Optional[ClaudeSDKClient] = None,
+        sandbox_manager=None
     ):
         """
         Initialize Test Generator agent.
@@ -54,9 +55,11 @@ class TestGeneratorAgent(BaseAgent):
             config: Configuration dict
             message_bus: Optional message bus for communication
             claude_client: Optional Claude SDK client for test generation
+            sandbox_manager: Optional E2BSandboxManager for test validation
         """
         super().__init__(agent_id, "test_generator", config, message_bus)
         self.client = claude_client
+        self.sandbox_manager = sandbox_manager
 
         # Test generation configuration
         self.generate_unit_tests = config.get("generate_unit_tests", True)
@@ -146,6 +149,20 @@ class TestGeneratorAgent(BaseAgent):
                         generation_result["test_count"][test_type] += len(test_files)
 
                 print(f"[{self.agent_id}] Generated {sum(generation_result['test_count'].values())} test files")
+
+                # Step 3.5: Validate generated tests in E2B sandbox (if available)
+                if self.sandbox_manager and generation_result["test_files_created"]:
+                    print(f"[{self.agent_id}] Validating generated tests in E2B sandbox...")
+                    validation_result = await self._validate_generated_tests(
+                        project_path,
+                        generation_result["test_files_created"]
+                    )
+                    generation_result["validation"] = validation_result
+
+                    if validation_result.get("success"):
+                        print(f"[{self.agent_id}] ✓ Generated tests validated successfully")
+                    else:
+                        print(f"[{self.agent_id}] ⚠️  Test validation had issues: {validation_result.get('error', 'Unknown error')}")
             else:
                 print(f"[{self.agent_id}] No Claude client available - skipping test file generation")
 
@@ -340,6 +357,80 @@ Please generate the {test_type} test files now.
         except Exception as e:
             print(f"[{self.agent_id}] Error generating {test_type} tests: {e}")
             return []
+
+    async def _validate_generated_tests(
+        self,
+        project_path: Path,
+        test_files: List[str]
+    ) -> Dict:
+        """
+        Validate generated tests by running them in E2B sandbox.
+
+        Args:
+            project_path: Path to project directory
+            test_files: List of test file paths that were generated
+
+        Returns:
+            Dict with validation results
+        """
+        if not self.sandbox_manager:
+            return {
+                "success": False,
+                "error": "No sandbox manager available"
+            }
+
+        try:
+            # Determine test command based on project type
+            test_command = "npm test"
+            package_json = project_path / "package.json"
+
+            if package_json.exists():
+                import json
+                try:
+                    with open(package_json, 'r') as f:
+                        pkg_data = json.load(f)
+                        scripts = pkg_data.get('scripts', {})
+                        if 'test' in scripts:
+                            test_command = "npm test"
+                        elif 'test:unit' in scripts:
+                            test_command = "npm run test:unit"
+                except Exception:
+                    pass
+
+            # Check for Python projects
+            elif (project_path / "pytest.ini").exists() or (project_path / "setup.py").exists():
+                test_command = "pytest"
+
+            print(f"[{self.agent_id}] Validating tests with command: {test_command}")
+
+            # Run tests in E2B
+            test_result = await self.sandbox_manager.run_tests(
+                project_path=project_path,
+                test_command=test_command
+            )
+
+            validation_result = {
+                "success": test_result.success,
+                "tests_passed": test_result.tests_passed,
+                "tests_failed": test_result.tests_failed,
+                "test_output": test_result.test_output[:500] if test_result.test_output else "",  # Truncate
+                "duration_seconds": test_result.duration_seconds,
+                "error": test_result.error
+            }
+
+            if test_result.success:
+                print(f"[{self.agent_id}] ✓ Tests validated: {test_result.tests_passed} passed")
+            else:
+                print(f"[{self.agent_id}] ✗ Test validation failed: {test_result.tests_failed} failures")
+
+            return validation_result
+
+        except Exception as e:
+            print(f"[{self.agent_id}] Error validating tests: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
 
     def _generate_test_summary(self, generation_result: Dict) -> str:
         """

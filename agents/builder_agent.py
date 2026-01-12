@@ -43,7 +43,8 @@ class BuilderAgent(BaseAgent):
         agent_id: str,
         config: Dict,
         message_bus: Optional[MessageBus] = None,
-        claude_client: Optional[ClaudeSDKClient] = None
+        claude_client: Optional[ClaudeSDKClient] = None,
+        sandbox_manager=None
     ):
         """
         Initialize Builder agent.
@@ -53,9 +54,11 @@ class BuilderAgent(BaseAgent):
             config: Configuration dict
             message_bus: Optional message bus for communication
             claude_client: Optional Claude SDK client for code generation
+            sandbox_manager: Optional E2BSandboxManager for code validation
         """
         super().__init__(agent_id, "builder", config, message_bus)
         self.client = claude_client
+        self.sandbox_manager = sandbox_manager
 
     async def execute_task(self, task: Dict) -> Dict:
         """
@@ -138,12 +141,34 @@ class BuilderAgent(BaseAgent):
 
             implementation_result["steps_completed"].append("implementation")
 
+            # Step 3.5: Validate implementation in E2B sandbox (if available)
+            if self.sandbox_manager and implementation_result.get("tests_created"):
+                try:
+                    print(f"[{self.agent_id}] Validating implementation in E2B sandbox...")
+                    validation_result = await self._validate_in_sandbox(
+                        project_path,
+                        implementation_result
+                    )
+                    implementation_result["e2b_validation"] = validation_result
+                    implementation_result["steps_completed"].append("e2b_validation")
+
+                    if not validation_result.get("success"):
+                        print(f"[{self.agent_id}] ⚠️  E2B validation failed: {validation_result.get('error')}")
+                        implementation_result["errors"].append(f"E2B validation failed: {validation_result.get('error')}")
+                    else:
+                        print(f"[{self.agent_id}] ✓ E2B validation passed")
+                except Exception as e:
+                    print(f"[{self.agent_id}] Warning: E2B validation error (continuing): {e}")
+                    implementation_result["errors"].append(f"E2B validation error: {str(e)}")
+
             # Step 4: Update checklist
             checklist.add_note(
                 checklist_task_id,
                 f"Implementation completed by {self.agent_id}\n" +
                 f"Files modified: {len(implementation_result['files_modified'])}\n" +
-                f"Tests created: {len(implementation_result['tests_created'])}"
+                f"Tests created: {len(implementation_result['tests_created'])}\n" +
+                (f"E2B validation: {'✓ Passed' if implementation_result.get('e2b_validation', {}).get('success') else '✗ Failed'}"
+                 if self.sandbox_manager and implementation_result.get("tests_created") else "")
             )
             checklist.update_task(checklist_task_id, status="Done")
             implementation_result["steps_completed"].append("checklist_updated")
@@ -303,6 +328,85 @@ Please implement this feature now."""
             return {
                 "files_modified": [],
                 "tests_created": [],
+                "error": str(e)
+            }
+
+    async def _validate_in_sandbox(
+        self,
+        project_path: Path,
+        implementation_result: Dict
+    ) -> Dict:
+        """
+        Validate implementation by running tests in E2B sandbox.
+
+        Args:
+            project_path: Path to project directory
+            implementation_result: Result from implementation step
+
+        Returns:
+            Dict with success status, test results, and validation details
+        """
+        if not self.sandbox_manager:
+            return {
+                "success": False,
+                "error": "No sandbox manager available"
+            }
+
+        try:
+            # Determine test command (try to detect from project)
+            test_command = "npm test"
+            package_json = project_path / "package.json"
+
+            if package_json.exists():
+                import json
+                try:
+                    with open(package_json, 'r') as f:
+                        pkg_data = json.load(f)
+                        scripts = pkg_data.get('scripts', {})
+                        if 'test' in scripts:
+                            test_command = "npm test"
+                        elif 'test:unit' in scripts:
+                            test_command = "npm run test:unit"
+                except Exception:
+                    pass  # Use default
+
+            # Check for Python projects
+            elif (project_path / "pytest.ini").exists() or (project_path / "setup.py").exists():
+                test_command = "pytest"
+            elif (project_path / "test").exists():
+                test_command = "python -m unittest discover"
+
+            print(f"[{self.agent_id}] Running tests with command: {test_command}")
+
+            # Run tests in E2B sandbox
+            test_result = await self.sandbox_manager.run_tests(
+                project_path=project_path,
+                test_command=test_command
+            )
+
+            # Parse test results
+            validation_result = {
+                "success": test_result.success,
+                "tests_passed": test_result.tests_passed,
+                "tests_failed": test_result.tests_failed,
+                "test_output": test_result.test_output[:1000] if test_result.test_output else "",  # Truncate
+                "duration_seconds": test_result.duration_seconds,
+                "error": test_result.error
+            }
+
+            if test_result.success:
+                print(f"[{self.agent_id}] ✓ Tests passed: {test_result.tests_passed}/{test_result.tests_passed + test_result.tests_failed}")
+            else:
+                print(f"[{self.agent_id}] ✗ Tests failed: {test_result.tests_failed} failures")
+                if test_result.error:
+                    print(f"[{self.agent_id}] Error: {test_result.error}")
+
+            return validation_result
+
+        except Exception as e:
+            print(f"[{self.agent_id}] Error during E2B validation: {e}")
+            return {
+                "success": False,
                 "error": str(e)
             }
 

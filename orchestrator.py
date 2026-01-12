@@ -25,11 +25,12 @@ from core.project_registry import ProjectRegistry
 from core.task_queue import TaskQueue
 from core.message_bus import MessageBus, MessageTypes
 from core.agent_memory import AgentMemory
+from core.e2b_sandbox_manager import E2BSandboxManager
 from agents import (
     BaseAgent, ArchitectAgent, BuilderAgent, TestGeneratorAgent,
     VerifierAgent, ReviewerAgent, DevOpsAgent, DocumentationAgent,
     ReporterAgent, AnalyticsAgent, RefactorAgent, DatabaseAgent,
-    UIDesignAgent
+    UIDesignAgent, E2BSandboxAgent
 )
 from client import create_client
 
@@ -60,13 +61,28 @@ class AgentOrchestrator:
         self.task_queue = TaskQueue()
         self.message_bus = MessageBus()
 
+        # E2B Sandbox Manager (optional)
+        e2b_config = self.config.get("e2b", {})
+        self.sandbox_manager = None
+        if e2b_config.get("enabled", True):
+            try:
+                self.sandbox_manager = E2BSandboxManager(e2b_config)
+                print("[Orchestrator] E2B Sandbox Manager initialized")
+            except Exception as e:
+                print(f"[Orchestrator] Warning: E2B initialization failed: {e}")
+                print("[Orchestrator] Continuing without E2B (will use local execution)")
+
+        # Auto-cleanup temp files
+        if self.config.get("auto_cleanup_temp_files", True):
+            self._cleanup_temp_files()
+
         # Agent pool
         self.agents: Dict[str, BaseAgent] = {}
         self.agent_types_available = [
             "architect", "builder", "test_generator", "verifier", "reviewer",
             "devops", "documentation", "reporter", "analytics", "refactor",
-            "database", "ui_design"
-        ]  # All 12 agents implemented! 🎉
+            "database", "ui_design", "e2b_sandbox"
+        ]  # All 13 agents implemented! 🎉
 
         # Orchestrator state
         self.running = False
@@ -85,7 +101,37 @@ class AgentOrchestrator:
             "default_model": os.getenv("DEFAULT_MODEL", "claude-opus-4-5-20251101"),
             "memory_dir": Path.cwd() / "AGENT_MEMORY",
             "health_check_interval": int(os.getenv("HEALTH_CHECK_INTERVAL", "60")),
+            "auto_cleanup_temp_files": True,
+            "e2b": {
+                "enabled": bool(os.getenv("E2B_ENABLED", "true").lower() in ("true", "1", "yes")),
+                "e2b_api_key": os.getenv("E2B_API_KEY"),
+                "default_template": os.getenv("E2B_TEMPLATE", "node20"),
+                "sandbox_pool_size": int(os.getenv("E2B_POOL_SIZE", "5")),
+                "sandbox_timeout_seconds": int(os.getenv("E2B_TIMEOUT", "600")),
+                "sandbox_memory_mb": int(os.getenv("E2B_MEMORY_MB", "2048")),
+                "sandbox_cpu_count": int(os.getenv("E2B_CPU_COUNT", "2")),
+                "persistent_sessions": True,
+                "auto_cleanup_age_minutes": 60,
+            }
         }
+
+    def _cleanup_temp_files(self):
+        """Clean up temporary files on orchestrator startup."""
+        try:
+            from utils.cleanup_temp_files import cleanup_temp_files
+
+            patterns = ["tmpclaude-*-cwd", "tmpclaude-*"]
+            result = cleanup_temp_files(
+                project_dir=Path.cwd(),
+                patterns=patterns,
+                older_than_hours=24
+            )
+
+            if result["deleted"] > 0:
+                print(f"[Orchestrator] Cleaned up {result['deleted']} temp files "
+                      f"({result['freed_bytes']} bytes)")
+        except Exception as e:
+            print(f"[Orchestrator] Warning: Temp file cleanup failed: {e}")
 
     async def start(self):
         """
@@ -95,6 +141,10 @@ class AgentOrchestrator:
         """
         print("[Orchestrator] Starting...")
         self.running = True
+
+        # Initialize E2B sandbox manager
+        if self.sandbox_manager:
+            await self.sandbox_manager.initialize()
 
         # Initialize agent pool
         await self._initialize_agent_pool()
@@ -124,6 +174,10 @@ class AgentOrchestrator:
             print(f"[Orchestrator] Cleaning up agent: {agent_id}")
             await agent.cleanup()
 
+        # Cleanup E2B sandbox manager
+        if self.sandbox_manager:
+            await self.sandbox_manager.cleanup()
+
         print("[Orchestrator] Stopped")
 
     async def _initialize_agent_pool(self):
@@ -149,7 +203,8 @@ class AgentOrchestrator:
             agent_id="builder-001",
             config=self.config,
             message_bus=self.message_bus,
-            claude_client=None  # Will be created per-project as needed
+            claude_client=None,  # Will be created per-project as needed
+            sandbox_manager=self.sandbox_manager
         )
         await builder.initialize()
         self.agents["builder-001"] = builder
@@ -160,7 +215,8 @@ class AgentOrchestrator:
             agent_id="testgen-001",
             config=self.config,
             message_bus=self.message_bus,
-            claude_client=None
+            claude_client=None,
+            sandbox_manager=self.sandbox_manager
         )
         await test_gen.initialize()
         self.agents["testgen-001"] = test_gen
@@ -171,7 +227,8 @@ class AgentOrchestrator:
             agent_id="verifier-001",
             config=self.config,
             message_bus=self.message_bus,
-            claude_client=None
+            claude_client=None,
+            sandbox_manager=self.sandbox_manager
         )
         await verifier.initialize()
         self.agents["verifier-001"] = verifier
@@ -265,8 +322,21 @@ class AgentOrchestrator:
         self.agents["uidesign-001"] = ui_design
         print(f"[Orchestrator] Created agent: uidesign-001 (type: ui_design)")
 
+        # E2B Sandbox agents - for sandboxed code execution (optional)
+        if self.sandbox_manager:
+            e2b_agent = E2BSandboxAgent(
+                agent_id="e2b-001",
+                config=self.config,
+                message_bus=self.message_bus,
+                sandbox_manager=self.sandbox_manager
+            )
+            await e2b_agent.initialize()
+            self.agents["e2b-001"] = e2b_agent
+            print(f"[Orchestrator] Created agent: e2b-001 (type: e2b_sandbox)")
+            print(f"  - E2B enabled: {self.sandbox_manager.is_available()}")
+
         print(f"[Orchestrator] Agent pool initialized with {len(self.agents)} agents")
-        print("[Orchestrator] All 12 specialized agent types ready!")
+        print(f"[Orchestrator] All {len(self.agent_types_available)} specialized agent types ready!")
 
     async def _task_processor(self):
         """
