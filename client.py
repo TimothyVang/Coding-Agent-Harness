@@ -9,10 +9,14 @@ import json
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from claude_code_sdk import ClaudeCodeOptions, ClaudeSDKClient
 from claude_code_sdk.types import HookMatcher
 
 from security import bash_security_hook
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 # Playwright MCP tools for browser automation and testing
@@ -40,6 +44,14 @@ PLAYWRIGHT_TOOLS = [
     "mcp__playwright__browser_file_upload",
     "mcp__playwright__browser_run_code",
     "mcp__playwright__browser_install",
+]
+
+# Context7 MCP tools for documentation lookup
+# Used by agents to research libraries and best practices before implementing
+# See: https://context7.com
+CONTEXT7_TOOLS = [
+    "mcp__context7__resolve-library-id",
+    "mcp__context7__query-docs",
 ]
 
 # Built-in tools
@@ -96,6 +108,8 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
                 "Bash(*)",
                 # Allow Playwright MCP tools for browser automation and testing
                 *PLAYWRIGHT_TOOLS,
+                # Allow Context7 MCP tools for documentation lookup
+                *CONTEXT7_TOOLS,
             ],
         },
     }
@@ -112,21 +126,34 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
     print("   - Sandbox enabled (OS-level bash isolation)")
     print(f"   - Filesystem restricted to: {project_dir.resolve()}")
     print("   - Bash commands restricted to allowlist (see security.py)")
-    print("   - MCP server: playwright (browser automation and testing)")
+    print("   - MCP servers:")
+    print("     • playwright (browser automation and testing)")
+    print("     • context7 (documentation lookup for best practices)")
     print()
+
+    # Get Context7 API key from environment
+    context7_api_key = os.environ.get("CONTEXT7_API_KEY", "")
 
     return ClaudeSDKClient(
         options=ClaudeCodeOptions(
             model=model,
-            system_prompt="You are an expert full-stack developer building a production-quality web application. You track your work using a local checklist system and test your application using Playwright.",
+            system_prompt="You are an expert full-stack developer building a production-quality web application. You track your work using a local checklist system, test your application using Playwright, and use Context7 to research best practices and documentation before implementing features.",
             allowed_tools=[
                 *BUILTIN_TOOLS,
                 *PLAYWRIGHT_TOOLS,
+                *CONTEXT7_TOOLS,
             ],
             mcp_servers={
                 # Playwright MCP server for browser automation
                 # See: https://playwright.dev/docs/intro
                 "playwright": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-playwright"]},
+                # Context7 MCP server for documentation lookup
+                # See: https://context7.com
+                "context7": {
+                    "command": "npx",
+                    "args": ["-y", "@context7/mcp-server"],
+                    "env": {"CONTEXT7_API_KEY": context7_api_key}
+                },
             },
             hooks={
                 "PreToolUse": [
