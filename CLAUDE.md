@@ -8,42 +8,59 @@ This is a **Universal AI Development Platform** - an autonomous multi-agent syst
 
 ## Running the System
 
-### Single-Agent Mode (Autonomous Demo)
+### Interactive TUI (Recommended)
 ```bash
-# Run agent with unlimited iterations
-python agent.py --project-dir ./my_project
+# Windows
+python tui.py
+# Or double-click: tui.bat
 
-# Run with iteration limit (for testing)
-python agent.py --project-dir ./my_project --max-iterations 3
-
-# Specify model
-python agent.py --project-dir ./my_project --model claude-opus-4-5-20251101
+# Linux/Mac
+python tui.py
 ```
 
-### Multi-Agent Orchestrator (Advanced)
+The TUI provides:
+- Project creation and management
+- Real-time progress monitoring
+- Agent memory dashboard with pattern/mistake visualization
+- Linear issue integration
+
+### Multi-Agent Orchestrator
+```bash
+# Windows
+python run_orchestrator.py
+# Or double-click: run_orchestrator.bat
+
+# Linux/Mac
+python run_orchestrator.py
+```
+
+### Programmatic Usage
 ```python
-# Start orchestrator programmatically
+import asyncio
+from pathlib import Path
 from orchestrator import AgentOrchestrator
 
-orchestrator = AgentOrchestrator()
-project_id = orchestrator.register_project(
-    name="My Project",
-    path=Path("./projects/example"),
-    spec_file=Path("./prompts/app_spec.txt"),
-    priority=1
-)
-await orchestrator.start()
+async def main():
+    orchestrator = AgentOrchestrator()
+    orchestrator.register_project(
+        name="My Project",
+        path=Path("./projects/example"),
+        spec_file=Path("./prompts/app_spec.txt"),
+        priority=1
+    )
+    await orchestrator.start()
+
+asyncio.run(main())
 ```
 
 ### Testing
 ```bash
-# Run all integration tests
-pytest tests/
+# Run all tests
+pytest tests/ -v
 
-# Run specific agent tests
-pytest tests/test_builder_agent.py
-pytest tests/test_quality_pipeline.py
-pytest tests/test_architect_reviewer.py
+# Run specific test files
+pytest tests/test_embeddings.py -v
+pytest tests/test_security.py -v
 ```
 
 ## Core Architecture
@@ -84,8 +101,10 @@ The platform has **5 core infrastructure layers** working together:
 **Key Components**:
 - `core/project_registry.py`: Multi-project tracking, workload distribution
 - `core/task_queue.py`: Priority-based task distribution (CRITICAL > HIGH > MEDIUM > LOW)
-- `core/message_bus.py`: Pub/sub inter-agent communication
-- `core/agent_memory.py`: Persistent learning (agents remember patterns/mistakes)
+- `core/message_bus.py`: Pub/sub inter-agent communication with JSON error handling
+- `core/agent_memory.py`: Persistent learning with vector embeddings for semantic search
+- `core/embeddings.py`: Sentence-transformers integration for similarity search
+- `core/memory_dashboard.py`: Rich console visualization for agent memory
 - `core/enhanced_checklist.py`: Subtasks, blocking mechanism, test coverage tracking
 
 ### 13 Specialized Agent Types
@@ -316,13 +335,34 @@ Verifier agents create blocking subtasks when issues found:
 - Prevents building on broken foundations
 
 ### Agent Memory & Learning
-Agents persist learnings to `AGENT_MEMORY/*.md`:
+Agents persist learnings to `AGENT_MEMORY/*.md` with optional vector embeddings:
 ```python
 from core.agent_memory import AgentMemory
 
-memory = AgentMemory("builder-001")
-memory.record_pattern("use_context7_before_implementation", success=True)
-patterns = memory.load_patterns()  # Retrieved in future tasks
+# Initialize with embeddings enabled
+memory = AgentMemory("builder-001", use_embeddings=True)
+
+# Add patterns and mistakes
+memory.add_pattern("JWT Auth", "Use refresh tokens for session management")
+memory.add_mistake("SQL Injection", "task-123", "Raw query", "Use parameterized queries")
+
+# Semantic similarity search (uses embeddings if available)
+relevant_patterns = memory.find_similar_patterns("authentication login")
+relevant_mistakes = memory.get_relevant_mistakes("database query security")
+
+# Save and load
+memory.save()
+memory.load()
+```
+
+### Memory Dashboard
+Visualize agent memory with the Rich console dashboard:
+```python
+from core.memory_dashboard import MemoryDashboard
+from pathlib import Path
+
+dashboard = MemoryDashboard(Path("./AGENT_MEMORY"))
+dashboard.display()  # Shows patterns, mistakes, and statistics
 ```
 
 ### Message Bus Communication
@@ -349,15 +389,26 @@ self.message_bus.send_direct(
 ## Testing the Platform
 
 **Test Structure**:
+- `tests/test_embeddings.py`: EmbeddingManager, EmbeddingStorage, AgentMemory integration
+- `tests/test_security.py`: Bash command security validation
 - `tests/test_builder_agent.py`: Builder agent initialization and execution
 - `tests/test_quality_pipeline.py`: Verifier/TestGenerator workflow
 - `tests/test_architect_reviewer.py`: Architect/Reviewer integration
 - `tests/test_phase4_agents.py`: DevOps/Docs/Reporter/Analytics
 
-**Running Specific Tests**:
+**Running Tests**:
 ```bash
-pytest tests/test_builder_agent.py::test_builder_agent_initialization -v
-pytest tests/test_quality_pipeline.py::test_blocking_subtask_workflow -v
+# All tests with verbose output
+pytest tests/ -v
+
+# Specific test file
+pytest tests/test_embeddings.py -v
+
+# Specific test function
+pytest tests/test_embeddings.py::TestEmbeddingManager::test_similarity_search -v
+
+# Skip tests requiring embeddings if not installed
+pytest tests/ -v -k "not embeddings"
 ```
 
 ## Windows Compatibility Notes

@@ -2,23 +2,60 @@
 
 A comprehensive autonomous development system powered by the Claude Agent SDK. Build, enhance, and manage multiple software projects simultaneously with a coordinated **agent army**.
 
-## 🚀 Multi-Agent Orchestrator
+## ✨ Key Features
+
+- **13 Specialized Agents** - Architect, Builder, Verifier, Reviewer, DevOps, and more
+- **Interactive TUI** - Rich terminal interface with Linear integration
+- **Vector Embeddings** - Semantic similarity search for agent memory
+- **Memory Dashboard** - Visualize agent learning patterns and mistakes
+- **E2B Sandboxing** - All code execution in isolated cloud VMs
+- **Multi-Project Support** - Manage multiple projects simultaneously
+
+## 🚀 Quick Start
+
+### Interactive TUI (Recommended)
+
+```bash
+# Windows
+python tui.py
+# Or double-click: tui.bat
+
+# Linux/Mac
+python tui.py
+```
+
+The TUI provides:
+- Project creation and management
+- Real-time progress monitoring
+- Agent memory dashboard
+- Linear issue integration
+
+### Orchestrator Mode
+
+```bash
+python run_orchestrator.py
+# Or double-click: run_orchestrator.bat
+```
+
+## 🤖 Multi-Agent Orchestrator
 
 This platform uses a **Multi-Agent Orchestrator** that coordinates 13 specialized agents:
 
-- **Architect Agent**: Planning and design - analyzes requirements, designs architecture
-- **Builder Agent**: Feature implementation - writes code, creates tests
-- **Test Generator Agent**: Automated test creation with Context7 documentation lookup
-- **Verifier Agent**: Quality assurance - ensures 100% completion with blocking subtasks
-- **Reviewer Agent**: Code review - checks quality, security, performance
-- **DevOps Agent**: CI/CD pipelines, containerization, cloud deployment
-- **Documentation Agent**: API docs, user guides, technical specs
-- **Reporter Agent**: Project status reports, sprint summaries
-- **Analytics Agent**: Pattern analysis, bottleneck detection, optimization recommendations
-- **Refactor Agent**: Code quality, technical debt reduction
-- **Database Agent**: Schema design, migrations, query optimization
-- **UI Design Agent**: UI/UX, WCAG accessibility validation, responsive design
-- **E2B Sandbox Agent**: Secure sandboxed code execution
+| Agent | Role |
+|-------|------|
+| **Architect** | Planning and design - analyzes requirements, designs architecture |
+| **Builder** | Feature implementation - writes code, creates tests |
+| **Test Generator** | Automated test creation with Context7 documentation lookup |
+| **Verifier** | Quality assurance - ensures 100% completion with blocking subtasks |
+| **Reviewer** | Code review - checks quality, security, performance |
+| **DevOps** | CI/CD pipelines, containerization, cloud deployment |
+| **Documentation** | API docs, user guides, technical specs |
+| **Reporter** | Project status reports, sprint summaries |
+| **Analytics** | Pattern analysis, bottleneck detection, optimization recommendations |
+| **Refactor** | Code quality, technical debt reduction |
+| **Database** | Schema design, migrations, query optimization |
+| **UI Design** | UI/UX, WCAG accessibility validation, responsive design |
+| **E2B Sandbox** | Secure sandboxed code execution |
 
 ## 🔒 Security Model
 
@@ -32,7 +69,7 @@ This platform uses a **Multi-Agent Orchestrator** that coordinates 13 specialize
 | **Bash Blocking** | Direct Bash tool blocked, redirects to E2B MCP tools |
 | **File Locking** | Concurrent access protected with `filelock` |
 
-## Prerequisites
+## 📋 Prerequisites
 
 ### 1. Install Dependencies
 
@@ -54,6 +91,7 @@ CLAUDE_CODE_OAUTH_TOKEN=your-token    # Run: claude setup-token
 E2B_API_KEY=your-e2b-key              # Get from: https://e2b.dev
 
 # Recommended
+LINEAR_API_KEY=your-linear-key        # Get from: https://linear.app/settings/api
 CONTEXT7_API_KEY=your-context7-key    # Get from: https://context7.com
 
 # Optional
@@ -68,57 +106,10 @@ DEFAULT_MODEL=claude-opus-4-5-20251101
 ```bash
 claude --version
 pip show claude-code-sdk
-python verify_fixes.py  # Verify all security fixes
+python verify_fixes.py  # Verify all components
 ```
 
-## Quick Start
-
-### Run the Orchestrator
-
-**Windows (double-click or command line):**
-```powershell
-python run_orchestrator.py
-# Or double-click: run_orchestrator.bat
-```
-
-**Linux/Mac:**
-```bash
-python run_orchestrator.py
-```
-
-The orchestrator will:
-1. Load your project spec from `prompts/dfir_spec.txt`
-2. Initialize 13 specialized agents
-3. Create/resume the project checklist
-4. Coordinate agents to complete tasks
-
-Press `Ctrl+C` to stop gracefully.
-
-### Custom Project
-
-Edit the launcher or create your own:
-
-```python
-import asyncio
-from pathlib import Path
-from orchestrator import AgentOrchestrator
-
-async def main():
-    orchestrator = AgentOrchestrator()
-
-    orchestrator.register_project(
-        name="My Project",
-        path=Path("./my_project"),
-        spec_file=Path("./prompts/my_spec.txt"),
-        priority=1
-    )
-
-    await orchestrator.start()
-
-asyncio.run(main())
-```
-
-## Core Infrastructure
+## 🏗️ Core Infrastructure
 
 ### 1. Enhanced Checklist Manager (`core/enhanced_checklist.py`)
 - Subtask support with blocking mechanism
@@ -134,40 +125,57 @@ asyncio.run(main())
 ### 3. Task Queue (`core/task_queue.py`)
 - Priority levels: CRITICAL > HIGH > MEDIUM > LOW
 - Agent type matching
-- Dependency management
+- Dependency management with fail-safe checks
 - Automatic retry (up to 3 attempts)
 
 ### 4. Message Bus (`core/message_bus.py`)
 - Pub/sub inter-agent communication
 - Direct messaging to specific agents
-- File-based persistence with locking
+- File-based persistence with locking and error handling
 
 ### 5. Agent Memory (`core/agent_memory.py`)
 - Persistent markdown-based memory per agent
 - Pattern learning from successes
 - Mistake tracking to avoid repeated errors
+- **Vector embeddings** for semantic similarity search
 
-### 6. E2B Sandbox Manager (`core/e2b_sandbox_manager.py`)
+### 6. Embedding Manager (`core/embeddings.py`)
+- Sentence-transformers integration (all-MiniLM-L6-v2)
+- Lazy model loading for fast startup
+- Cosine similarity search across patterns/mistakes
+- NumPy-based storage for fast retrieval
+
+### 7. Memory Dashboard (`core/memory_dashboard.py`)
+- Rich console visualization of agent memory
+- Pattern and mistake statistics
+- Real-time memory inspection
+
+### 8. E2B Sandbox Manager (`core/e2b_sandbox_manager.py`)
 - Cloud-based isolated execution
 - Hard-fail if unavailable (no local fallback)
 - Shell injection protection
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 Coding-Agent-Harness/
-├── run_orchestrator.py       # Main entry point
-├── run_orchestrator.bat      # Windows launcher
+├── tui.py                    # Interactive terminal interface
+├── tui.bat                   # Windows TUI launcher
+├── run_orchestrator.py       # Orchestrator entry point
+├── run_orchestrator.bat      # Windows orchestrator launcher
 ├── orchestrator.py           # Multi-agent coordinator
-├── client.py                 # Claude SDK + 9 MCP servers
+├── client.py                 # Claude SDK + 10 MCP servers
 ├── security.py               # Bash blocking, E2B redirect
-├── verify_fixes.py           # Security verification script
+├── verify_fixes.py           # Component verification script
+├── pytest.ini                # Test configuration
 ├── core/
 │   ├── enhanced_checklist.py # Task tracking with subtasks
 │   ├── project_registry.py   # Multi-project management
 │   ├── task_queue.py         # Priority-based distribution
 │   ├── message_bus.py        # Inter-agent communication
 │   ├── agent_memory.py       # Learning and memory
+│   ├── embeddings.py         # Vector embeddings for similarity
+│   ├── memory_dashboard.py   # Rich console visualization
 │   └── e2b_sandbox_manager.py # Sandboxed execution
 ├── agents/
 │   ├── base_agent.py         # Foundation class
@@ -192,11 +200,13 @@ Coding-Agent-Harness/
 │   ├── initializer_prompt.md # Checklist creation prompt
 │   └── coding_prompt.md      # Task implementation prompt
 ├── tests/                    # Integration tests
+│   ├── test_embeddings.py    # Embedding system tests
+│   └── test_security.py      # Security hook tests
 ├── .env.example              # Environment template
-└── requirements.txt          # Python dependencies
+└── requirements.txt          # Python dependencies (pinned)
 ```
 
-## MCP Servers (9 Total)
+## 🔌 MCP Servers (10 Total)
 
 | Server | Purpose |
 |--------|---------|
@@ -209,6 +219,7 @@ Coding-Agent-Harness/
 | **Memory** | Knowledge graph memory |
 | **Sequential Thinking** | Problem-solving |
 | **Fetch** | Web content retrieval |
+| **Linear** | Project management and issue tracking |
 
 ## Workflow
 
