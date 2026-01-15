@@ -10,6 +10,7 @@ Features:
 - Task dependencies
 - Retry logic for failed tasks
 - Queue statistics and monitoring
+- File locking for concurrency safety
 """
 
 import json
@@ -17,6 +18,13 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
+
+try:
+    from filelock import FileLock
+    FILELOCK_AVAILABLE = True
+except ImportError:
+    FILELOCK_AVAILABLE = False
+    FileLock = None
 
 
 class TaskQueue:
@@ -57,24 +65,40 @@ class TaskQueue:
         }
 
     def _load_or_create(self) -> Dict:
-        """Load existing queue or create new structure."""
-        if self.queue_path.exists():
-            with open(self.queue_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
+        """Load existing queue or create new structure with file locking."""
+        def _do_load():
+            if self.queue_path.exists():
+                with open(self.queue_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            else:
+                return {
+                    "version": "1.0",
+                    "created_at": datetime.now().isoformat(),
+                    "last_updated": datetime.now().isoformat(),
+                    "tasks": [],
+                    "history": []
+                }
+
+        if FILELOCK_AVAILABLE:
+            lock = FileLock(str(self.queue_path) + ".lock")
+            with lock:
+                return _do_load()
         else:
-            return {
-                "version": "1.0",
-                "created_at": datetime.now().isoformat(),
-                "last_updated": datetime.now().isoformat(),
-                "tasks": [],
-                "history": []
-            }
+            return _do_load()
 
     def _save(self):
-        """Save queue to disk."""
-        self.data["last_updated"] = datetime.now().isoformat()
-        with open(self.queue_path, 'w', encoding='utf-8') as f:
-            json.dump(self.data, f, indent=2)
+        """Save queue to disk with file locking."""
+        def _do_save():
+            self.data["last_updated"] = datetime.now().isoformat()
+            with open(self.queue_path, 'w', encoding='utf-8') as f:
+                json.dump(self.data, f, indent=2)
+
+        if FILELOCK_AVAILABLE:
+            lock = FileLock(str(self.queue_path) + ".lock")
+            with lock:
+                _do_save()
+        else:
+            _do_save()
 
     def enqueue(
         self,
@@ -435,8 +459,9 @@ class TaskQueue:
             )
 
             if not dep_in_history and not dep_task:
-                # Dependency not found - treat as met (may have been deleted)
-                continue
+                # Dependency not found - fail safe, don't allow task to run
+                # This prevents race conditions where tasks start before dependencies complete
+                return False
 
             if not dep_in_history:
                 return False

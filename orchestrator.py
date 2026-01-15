@@ -97,9 +97,9 @@ class AgentOrchestrator:
         return {
             "max_concurrent_agents": int(os.getenv("MAX_CONCURRENT_AGENTS", "10")),
             "agent_timeout": int(os.getenv("AGENT_TIMEOUT", "3600")),
-            "projects_base_path": os.getenv("PROJECTS_BASE_PATH", "./projects"),
+            "projects_base_path": os.getenv("PROJECTS_BASE_PATH", str(Path(__file__).parent / "projects")),
             "default_model": os.getenv("DEFAULT_MODEL", "claude-opus-4-5-20251101"),
-            "memory_dir": Path.cwd() / "AGENT_MEMORY",
+            "memory_dir": Path(__file__).parent / "AGENT_MEMORY",
             "health_check_interval": int(os.getenv("HEALTH_CHECK_INTERVAL", "60")),
             "auto_cleanup_temp_files": True,
             "e2b": {
@@ -180,160 +180,132 @@ class AgentOrchestrator:
 
         print("[Orchestrator] Stopped")
 
+    async def _safe_init_agent(self, agent_id: str, agent_type: str, agent_class, **kwargs) -> bool:
+        """
+        Safely initialize an agent with error handling.
+
+        Args:
+            agent_id: Unique identifier for the agent
+            agent_type: Type of agent (for logging)
+            agent_class: Agent class to instantiate
+            **kwargs: Arguments to pass to agent constructor
+
+        Returns:
+            True if agent initialized successfully, False otherwise
+        """
+        try:
+            agent = agent_class(agent_id=agent_id, **kwargs)
+            await agent.initialize()
+            self.agents[agent_id] = agent
+            print(f"[Orchestrator] Created agent: {agent_id} (type: {agent_type})")
+            return True
+        except Exception as e:
+            print(f"[Orchestrator] Failed to initialize {agent_id} ({agent_type}): {e}")
+            return False
+
     async def _initialize_agent_pool(self):
         """Initialize pool of agents."""
         print("[Orchestrator] Initializing agent pool...")
+
+        # Create shared Claude client for agents
+        claude_client = None
+        try:
+            # Extract project_dir and model from config
+            project_dir = Path(self.config.get("project_dir", "."))
+            model = self.config.get("model", os.getenv("DEFAULT_MODEL", "claude-opus-4-5-20251101"))
+            claude_client = create_client(project_dir, model)
+            print("[Orchestrator] Claude SDK client created successfully")
+        except Exception as e:
+            print(f"[Orchestrator] WARNING: Could not create Claude client: {e}")
+            print("[Orchestrator] Agents will have limited functionality")
 
         # Create agents for each type
         # In production, would create multiple agents of each type based on workload
 
         # Architect agents - for planning and design
-        architect = ArchitectAgent(
-            agent_id="architect-001",
-            config=self.config,
-            message_bus=self.message_bus,
-            claude_client=None  # Will be created per-project as needed
+        await self._safe_init_agent(
+            "architect-001", "architect", ArchitectAgent,
+            config=self.config, message_bus=self.message_bus, claude_client=claude_client
         )
-        await architect.initialize()
-        self.agents["architect-001"] = architect
-        print(f"[Orchestrator] Created agent: architect-001 (type: architect)")
 
         # Builder agents - for feature implementation
-        builder = BuilderAgent(
-            agent_id="builder-001",
-            config=self.config,
-            message_bus=self.message_bus,
-            claude_client=None,  # Will be created per-project as needed
-            sandbox_manager=self.sandbox_manager
+        await self._safe_init_agent(
+            "builder-001", "builder", BuilderAgent,
+            config=self.config, message_bus=self.message_bus,
+            claude_client=claude_client, sandbox_manager=self.sandbox_manager
         )
-        await builder.initialize()
-        self.agents["builder-001"] = builder
-        print(f"[Orchestrator] Created agent: builder-001 (type: builder)")
 
         # Test Generator agents - for test creation
-        test_gen = TestGeneratorAgent(
-            agent_id="testgen-001",
-            config=self.config,
-            message_bus=self.message_bus,
-            claude_client=None,
-            sandbox_manager=self.sandbox_manager
+        await self._safe_init_agent(
+            "testgen-001", "test_generator", TestGeneratorAgent,
+            config=self.config, message_bus=self.message_bus,
+            claude_client=claude_client, sandbox_manager=self.sandbox_manager
         )
-        await test_gen.initialize()
-        self.agents["testgen-001"] = test_gen
-        print(f"[Orchestrator] Created agent: testgen-001 (type: test_generator)")
 
         # Verifier agents - for quality assurance
-        verifier = VerifierAgent(
-            agent_id="verifier-001",
-            config=self.config,
-            message_bus=self.message_bus,
-            claude_client=None,
-            sandbox_manager=self.sandbox_manager
+        await self._safe_init_agent(
+            "verifier-001", "verifier", VerifierAgent,
+            config=self.config, message_bus=self.message_bus,
+            claude_client=claude_client, sandbox_manager=self.sandbox_manager
         )
-        await verifier.initialize()
-        self.agents["verifier-001"] = verifier
-        print(f"[Orchestrator] Created agent: verifier-001 (type: verifier)")
 
         # Reviewer agents - for code review
-        reviewer = ReviewerAgent(
-            agent_id="reviewer-001",
-            config=self.config,
-            message_bus=self.message_bus,
-            claude_client=None
+        await self._safe_init_agent(
+            "reviewer-001", "reviewer", ReviewerAgent,
+            config=self.config, message_bus=self.message_bus, claude_client=claude_client
         )
-        await reviewer.initialize()
-        self.agents["reviewer-001"] = reviewer
-        print(f"[Orchestrator] Created agent: reviewer-001 (type: reviewer)")
 
         # DevOps agents - for infrastructure and deployment
-        devops = DevOpsAgent(
-            agent_id="devops-001",
-            config=self.config,
-            message_bus=self.message_bus,
-            claude_client=None
+        await self._safe_init_agent(
+            "devops-001", "devops", DevOpsAgent,
+            config=self.config, message_bus=self.message_bus, claude_client=claude_client
         )
-        await devops.initialize()
-        self.agents["devops-001"] = devops
-        print(f"[Orchestrator] Created agent: devops-001 (type: devops)")
 
         # Documentation agents - for documentation generation
-        documentation = DocumentationAgent(
-            agent_id="docs-001",
-            config=self.config,
-            message_bus=self.message_bus,
-            claude_client=None
+        await self._safe_init_agent(
+            "docs-001", "documentation", DocumentationAgent,
+            config=self.config, message_bus=self.message_bus, claude_client=claude_client
         )
-        await documentation.initialize()
-        self.agents["docs-001"] = documentation
-        print(f"[Orchestrator] Created agent: docs-001 (type: documentation)")
 
         # Reporter agents - for report generation
-        reporter = ReporterAgent(
-            agent_id="reporter-001",
-            config=self.config,
-            message_bus=self.message_bus,
-            claude_client=None
+        await self._safe_init_agent(
+            "reporter-001", "reporter", ReporterAgent,
+            config=self.config, message_bus=self.message_bus, claude_client=claude_client
         )
-        await reporter.initialize()
-        self.agents["reporter-001"] = reporter
-        print(f"[Orchestrator] Created agent: reporter-001 (type: reporter)")
 
         # Analytics agents - for pattern analysis and insights
-        analytics = AnalyticsAgent(
-            agent_id="analytics-001",
-            config=self.config,
-            message_bus=self.message_bus,
-            claude_client=None
+        await self._safe_init_agent(
+            "analytics-001", "analytics", AnalyticsAgent,
+            config=self.config, message_bus=self.message_bus, claude_client=claude_client
         )
-        await analytics.initialize()
-        self.agents["analytics-001"] = analytics
-        print(f"[Orchestrator] Created agent: analytics-001 (type: analytics)")
 
         # Refactor agents - for code quality and refactoring
-        refactor = RefactorAgent(
-            agent_id="refactor-001",
-            config=self.config,
-            message_bus=self.message_bus,
-            claude_client=None
+        await self._safe_init_agent(
+            "refactor-001", "refactor", RefactorAgent,
+            config=self.config, message_bus=self.message_bus, claude_client=claude_client
         )
-        await refactor.initialize()
-        self.agents["refactor-001"] = refactor
-        print(f"[Orchestrator] Created agent: refactor-001 (type: refactor)")
 
         # Database agents - for schema design and optimization
-        database = DatabaseAgent(
-            agent_id="database-001",
-            config=self.config,
-            message_bus=self.message_bus,
-            claude_client=None
+        await self._safe_init_agent(
+            "database-001", "database", DatabaseAgent,
+            config=self.config, message_bus=self.message_bus, claude_client=claude_client
         )
-        await database.initialize()
-        self.agents["database-001"] = database
-        print(f"[Orchestrator] Created agent: database-001 (type: database)")
 
         # UI Design agents - for UI/UX and accessibility
-        ui_design = UIDesignAgent(
-            agent_id="uidesign-001",
-            config=self.config,
-            message_bus=self.message_bus,
-            claude_client=None
+        await self._safe_init_agent(
+            "uidesign-001", "ui_design", UIDesignAgent,
+            config=self.config, message_bus=self.message_bus, claude_client=claude_client
         )
-        await ui_design.initialize()
-        self.agents["uidesign-001"] = ui_design
-        print(f"[Orchestrator] Created agent: uidesign-001 (type: ui_design)")
 
         # E2B Sandbox agents - for sandboxed code execution (optional)
         if self.sandbox_manager:
-            e2b_agent = E2BSandboxAgent(
-                agent_id="e2b-001",
-                config=self.config,
-                message_bus=self.message_bus,
+            success = await self._safe_init_agent(
+                "e2b-001", "e2b_sandbox", E2BSandboxAgent,
+                config=self.config, message_bus=self.message_bus,
                 sandbox_manager=self.sandbox_manager
             )
-            await e2b_agent.initialize()
-            self.agents["e2b-001"] = e2b_agent
-            print(f"[Orchestrator] Created agent: e2b-001 (type: e2b_sandbox)")
-            print(f"  - E2B enabled: {self.sandbox_manager.is_available()}")
+            if success:
+                print(f"  - E2B enabled: {self.sandbox_manager.is_available()}")
 
         print(f"[Orchestrator] Agent pool initialized with {len(self.agents)} agents")
         print(f"[Orchestrator] All {len(self.agent_types_available)} specialized agent types ready!")

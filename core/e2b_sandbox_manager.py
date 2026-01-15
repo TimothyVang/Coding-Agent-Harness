@@ -114,14 +114,16 @@ class E2BSandboxManager:
         self.e2b_enabled = config.get("e2b_enabled", bool(self.e2b_api_key))
 
         if self.e2b_enabled and not E2B_AVAILABLE:
-            logger.warning("E2B is enabled but e2b package not installed. "
-                          "Falling back to local execution. Install with: pip install e2b")
-            self.e2b_enabled = False
+            raise RuntimeError(
+                "SECURITY: E2B sandbox required but e2b package not installed. "
+                "Install with: pip install e2b, or set E2B_ENABLED=false in .env"
+            )
 
         if self.e2b_enabled and not self.e2b_api_key:
-            logger.warning("E2B is enabled but no API key found. "
-                          "Set E2B_API_KEY environment variable. Falling back to local execution.")
-            self.e2b_enabled = False
+            raise RuntimeError(
+                "SECURITY: E2B sandbox required but E2B_API_KEY not set. "
+                "Set E2B_API_KEY in .env or set E2B_ENABLED=false"
+            )
 
         # Sandbox configuration
         self.default_template = config.get("default_template", "node20")
@@ -167,9 +169,10 @@ class E2BSandboxManager:
                 # We'll create a test sandbox during first execution
                 logger.info("[E2BSandboxManager] E2B connection ready")
             except Exception as e:
-                logger.error(f"[E2BSandboxManager] E2B initialization failed: {e}")
-                logger.warning("[E2BSandboxManager] Falling back to local execution")
-                self.e2b_enabled = False
+                raise RuntimeError(
+                    f"SECURITY: E2B sandbox initialization failed: {e}. "
+                    "Cannot proceed without sandbox isolation."
+                )
 
         # Start cleanup task
         if self.cleanup_age_minutes > 0:
@@ -206,12 +209,14 @@ class E2BSandboxManager:
         self.metrics["executions_total"] += 1
 
         try:
-            if self.e2b_enabled:
-                result = await self._execute_in_e2b(
-                    command, cwd, timeout, env, persistent_session, session_id
+            if not self.e2b_enabled:
+                raise RuntimeError(
+                    "SECURITY: E2B sandbox required but not available. "
+                    "Cannot execute commands without sandbox isolation."
                 )
-            else:
-                result = await self._execute_locally(command, cwd, timeout, env)
+            result = await self._execute_in_e2b(
+                command, cwd, timeout, env, persistent_session, session_id
+            )
 
             duration = (datetime.now() - start_time).total_seconds()
             result.duration_seconds = duration
@@ -321,67 +326,12 @@ class E2BSandboxManager:
                 error=str(e)
             )
 
-    async def _execute_locally(
-        self,
-        command: str,
-        cwd: str,
-        timeout: int,
-        env: Optional[Dict]
-    ) -> ExecutionResult:
-        """Execute command locally using subprocess."""
-        logger.debug(f"[E2BSandboxManager] Executing locally: {command}")
-
-        try:
-            # Merge environment variables
-            proc_env = os.environ.copy()
-            if env:
-                proc_env.update(env)
-
-            # Run command
-            process = await asyncio.create_subprocess_shell(
-                command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                cwd=cwd if os.path.exists(cwd) else None,
-                env=proc_env
-            )
-
-            stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                process.communicate(),
-                timeout=timeout
-            )
-
-            stdout = stdout_bytes.decode('utf-8', errors='replace')
-            stderr = stderr_bytes.decode('utf-8', errors='replace')
-
-            return ExecutionResult(
-                success=process.returncode == 0,
-                exit_code=process.returncode or 0,
-                stdout=stdout,
-                stderr=stderr,
-                duration_seconds=0.0  # Set by caller
-            )
-
-        except asyncio.TimeoutError:
-            if process:
-                process.kill()
-            return ExecutionResult(
-                success=False,
-                exit_code=-1,
-                stdout="",
-                stderr=f"Command timed out after {timeout} seconds",
-                duration_seconds=float(timeout),
-                error="Timeout"
-            )
-        except Exception as e:
-            return ExecutionResult(
-                success=False,
-                exit_code=-1,
-                stdout="",
-                stderr=str(e),
-                duration_seconds=0.0,
-                error=str(e)
-            )
+    # SECURITY: _execute_locally has been REMOVED to prevent unsafe local execution.
+    # All commands MUST go through E2B sandbox. If E2B is unavailable, execution
+    # will fail-fast with RuntimeError rather than falling back to unrestricted
+    # local execution which caused the system crash.
+    #
+    # See SAFETY-README.md for details on why this was necessary.
 
     async def _create_sandbox(self) -> Any:
         """Create a new E2B sandbox."""

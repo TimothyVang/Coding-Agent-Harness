@@ -2,11 +2,15 @@
 Security Hooks for Autonomous Coding Agent
 ==========================================
 
-NOTE: Command restrictions have been REMOVED to enable full agent autonomy.
-E2B sandboxes provide OS-level isolation, eliminating the need for command allowlists.
+SECURITY: ALL direct bash commands are BLOCKED by default.
+Commands MUST go through the E2B sandbox via MCP tools.
 
-This file is kept for reference and potential future customization, but all
-commands are now permitted by default.
+The bash_security_hook blocks ALL Bash tool usage and redirects users
+to use the E2B MCP tools (mcp__e2b__e2b_execute_command, etc.) which
+execute commands safely in a cloud sandbox.
+
+This prevents agents from accidentally (or maliciously) executing
+commands directly on the host system.
 """
 
 import os
@@ -278,13 +282,14 @@ def get_command_for_validation(cmd: str, segments: list[str]) -> str:
 
 async def bash_security_hook(input_data, tool_use_id=None, context=None):
     """
-    Pre-tool-use hook for bash commands.
+    Pre-tool-use hook that BLOCKS ALL direct bash commands.
 
-    NOTE: Command restrictions REMOVED - all commands are now permitted.
-    E2B sandboxes provide OS-level isolation for security.
+    SECURITY: All bash commands MUST go through E2B sandbox.
+    This hook blocks the direct Bash tool and redirects users to
+    the E2B MCP tools which execute safely in a cloud sandbox.
 
-    This hook is kept for potential future customization but currently
-    allows all commands to enable maximum agent autonomy.
+    This prevents agents from accidentally (or maliciously) executing
+    commands directly on the host system.
 
     Args:
         input_data: Dict containing tool_name and tool_input
@@ -292,8 +297,35 @@ async def bash_security_hook(input_data, tool_use_id=None, context=None):
         context: Optional context
 
     Returns:
-        Empty dict (allows all commands)
+        Dict with 'block' key (always blocks Bash tool)
     """
-    # No restrictions - allow all commands
-    # E2B sandboxes provide isolation
-    return {}
+    tool_name = input_data.get("tool_name", "")
+    tool_input = input_data.get("tool_input", {})
+
+    if tool_name != "Bash":
+        return {}
+
+    command = tool_input.get("command", "")
+
+    # Truncate command for display
+    cmd_preview = command[:100] + "..." if len(command) > 100 else command
+
+    # BLOCK ALL DIRECT BASH COMMANDS
+    # All commands must go through E2B sandbox for security
+    return {
+        "block": True,
+        "reason": (
+            f"SECURITY: Direct bash execution is BLOCKED.\n\n"
+            f"Attempted command: {cmd_preview}\n\n"
+            f"Why: All commands must run in E2B cloud sandbox to prevent "
+            f"executing potentially dangerous code on your local system.\n\n"
+            f"USE THESE E2B TOOLS INSTEAD:\n"
+            f"  - mcp__e2b__e2b_execute_command: Run shell commands in sandbox\n"
+            f"  - mcp__e2b__e2b_list_files: List directory contents\n"
+            f"  - mcp__e2b__e2b_read_file: Read file from sandbox\n"
+            f"  - mcp__e2b__e2b_write_file: Write file in sandbox\n"
+            f"  - mcp__e2b__e2b_run_tests: Run test suite in sandbox\n\n"
+            f"Example:\n"
+            f'  mcp__e2b__e2b_execute_command(command="{cmd_preview[:50]}")'
+        )
+    }

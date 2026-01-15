@@ -13,11 +13,19 @@ Features:
 - Support for various message types
 """
 
+import asyncio
 import json
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Callable, Dict, List, Optional
+
+try:
+    from filelock import FileLock
+    FILELOCK_AVAILABLE = True
+except ImportError:
+    FILELOCK_AVAILABLE = False
+    FileLock = None
 
 
 class MessageBus:
@@ -61,39 +69,81 @@ class MessageBus:
         self.callbacks: Dict[str, List[Callable]] = {}
 
     def _load_or_create(self) -> Dict:
-        """Load existing messages or create new structure."""
-        if self.messages_file.exists():
-            with open(self.messages_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
+        """Load existing messages or create new structure with file locking."""
+        def _do_load():
+            if self.messages_file.exists():
+                with open(self.messages_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            else:
+                return {
+                    "version": "1.0",
+                    "created_at": datetime.now().isoformat(),
+                    "last_updated": datetime.now().isoformat(),
+                    "messages": [],
+                    "channels": {}
+                }
+
+        if FILELOCK_AVAILABLE:
+            lock = FileLock(str(self.messages_file) + ".lock")
+            with lock:
+                return _do_load()
         else:
-            return {
-                "version": "1.0",
-                "created_at": datetime.now().isoformat(),
-                "last_updated": datetime.now().isoformat(),
-                "messages": [],
-                "channels": {}
-            }
+            return _do_load()
 
     def _load_subscriptions(self) -> Dict:
-        """Load subscriptions registry."""
-        if self.subscriptions_file.exists():
-            with open(self.subscriptions_file, 'r', encoding='utf-8') as f:
-                return json.load(f)
+        """Load subscriptions registry with file locking."""
+        def _do_load():
+            if self.subscriptions_file.exists():
+                with open(self.subscriptions_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            else:
+                return {
+                    "subscriptions": {}
+                }
+
+        if FILELOCK_AVAILABLE:
+            lock = FileLock(str(self.subscriptions_file) + ".lock")
+            with lock:
+                return _do_load()
         else:
-            return {
-                "subscriptions": {}
-            }
+            return _do_load()
 
     def _save(self):
-        """Save messages to disk."""
-        self.data["last_updated"] = datetime.now().isoformat()
-        with open(self.messages_file, 'w', encoding='utf-8') as f:
-            json.dump(self.data, f, indent=2)
+        """Save messages to disk with file locking."""
+        def _do_save():
+            self.data["last_updated"] = datetime.now().isoformat()
+            try:
+                with open(self.messages_file, 'w', encoding='utf-8') as f:
+                    json.dump(self.data, f, indent=2, default=str)
+            except (TypeError, ValueError) as e:
+                print(f"[MessageBus] Error saving messages: {e}")
+            except IOError as e:
+                print(f"[MessageBus] I/O error saving messages: {e}")
+
+        if FILELOCK_AVAILABLE:
+            lock = FileLock(str(self.messages_file) + ".lock")
+            with lock:
+                _do_save()
+        else:
+            _do_save()
 
     def _save_subscriptions(self):
-        """Save subscriptions to disk."""
-        with open(self.subscriptions_file, 'w', encoding='utf-8') as f:
-            json.dump(self.subscriptions, f, indent=2)
+        """Save subscriptions to disk with file locking."""
+        def _do_save():
+            try:
+                with open(self.subscriptions_file, 'w', encoding='utf-8') as f:
+                    json.dump(self.subscriptions, f, indent=2, default=str)
+            except (TypeError, ValueError) as e:
+                print(f"[MessageBus] Error saving subscriptions: {e}")
+            except IOError as e:
+                print(f"[MessageBus] I/O error saving subscriptions: {e}")
+
+        if FILELOCK_AVAILABLE:
+            lock = FileLock(str(self.subscriptions_file) + ".lock")
+            with lock:
+                _do_save()
+        else:
+            _do_save()
 
     def publish(
         self,
@@ -375,11 +425,14 @@ class MessageBus:
         self._save()
 
     def _trigger_callbacks(self, channel: str, message: Dict):
-        """Trigger callbacks for a channel."""
+        """Trigger callbacks for a channel (supports async callbacks)."""
         if channel in self.callbacks:
             for callback in self.callbacks[channel]:
                 try:
-                    callback(message)
+                    result = callback(message)
+                    # If callback is async, schedule it as a task
+                    if asyncio.iscoroutine(result):
+                        asyncio.create_task(result)
                 except Exception as e:
                     # Log error but don't fail
                     print(f"Error in callback for channel {channel}: {e}")

@@ -1,6 +1,3 @@
-# Agent-generated output directories
-generations/
-
 # Log files
 logs/
 
@@ -23,6 +20,11 @@ tmpclaude-*
 # Agent memory and state (optional - can be committed if desired)
 AGENT_MEMORY/
 .agent_army/
+
+# Generated per-project files
+.project_checklist.json
+.claude_settings.json
+.linear_project.json
 
 # IDE
 .vscode/

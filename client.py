@@ -56,14 +56,9 @@ CONTEXT7_TOOLS = [
 
 # Filesystem MCP tools for file operations
 # See: https://github.com/modelcontextprotocol/servers
+# Using wildcard to allow all filesystem tools (future-proof)
 FILESYSTEM_TOOLS = [
-    "mcp__filesystem__read_file",
-    "mcp__filesystem__write_file",
-    "mcp__filesystem__list_directory",
-    "mcp__filesystem__create_directory",
-    "mcp__filesystem__move_file",
-    "mcp__filesystem__search_files",
-    "mcp__filesystem__get_file_info",
+    "mcp__filesystem__*",
 ]
 
 # GitHub MCP tools for version control and collaboration
@@ -116,14 +111,53 @@ FETCH_TOOLS = [
     "mcp__fetch__fetch",
 ]
 
-# Built-in tools
+# Linear MCP tools for project management
+# Official Linear MCP server at mcp.linear.app
+# See: https://linear.app/docs/mcp
+LINEAR_TOOLS = [
+    # Team & Project discovery
+    "mcp__linear__list_teams",
+    "mcp__linear__get_team",
+    "mcp__linear__list_projects",
+    "mcp__linear__get_project",
+    "mcp__linear__create_project",
+    "mcp__linear__update_project",
+    # Issue management
+    "mcp__linear__list_issues",
+    "mcp__linear__get_issue",
+    "mcp__linear__create_issue",
+    "mcp__linear__update_issue",
+    "mcp__linear__list_my_issues",
+    # Comments
+    "mcp__linear__list_comments",
+    "mcp__linear__create_comment",
+    # Workflow
+    "mcp__linear__list_issue_statuses",
+    "mcp__linear__get_issue_status",
+    "mcp__linear__list_issue_labels",
+    # Users
+    "mcp__linear__list_users",
+    "mcp__linear__get_user",
+]
+
+# E2B MCP tools for sandboxed execution (CRITICAL SECURITY)
+# All bash commands MUST go through E2B sandbox to prevent host system compromise
+E2B_TOOLS = [
+    "mcp__e2b__e2b_execute_command",
+    "mcp__e2b__e2b_list_files",
+    "mcp__e2b__e2b_read_file",
+    "mcp__e2b__e2b_write_file",
+    "mcp__e2b__e2b_run_tests",
+]
+
+# Built-in tools (NOTE: Bash intentionally excluded - use E2B_TOOLS instead)
 BUILTIN_TOOLS = [
     "Read",
     "Write",
     "Edit",
     "Glob",
     "Grep",
-    "Bash",
+    # "Bash" - REMOVED FOR SECURITY: Direct bash is blocked, use E2B sandbox instead
 ]
 
 
@@ -151,6 +185,25 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
             "Run 'claude setup-token' after installing the Claude Code CLI."
         )
 
+    # SECURITY: Require E2B sandbox for command execution
+    # This prevents agents from running commands directly on the host system
+    e2b_api_key = os.environ.get("E2B_API_KEY")
+    if not e2b_api_key:
+        raise ValueError(
+            "SECURITY: E2B_API_KEY environment variable not set.\n"
+            "E2B sandbox is REQUIRED for safe command execution.\n"
+            "Get an API key at https://e2b.dev and add to .env file.\n"
+            "Without E2B, bash commands would execute directly on your system!"
+        )
+
+    # Require Linear API key for project management
+    linear_api_key = os.environ.get("LINEAR_API_KEY")
+    if not linear_api_key:
+        raise ValueError(
+            "LINEAR_API_KEY environment variable not set.\n"
+            "Get your API key from: https://linear.app/YOUR-TEAM/settings/api"
+        )
+
     # Create comprehensive security settings
     # Note: Using relative paths ("./**") restricts access to project directory
     # since cwd is set to project_dir
@@ -165,9 +218,10 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
                 "Edit(./**)",
                 "Glob(./**)",
                 "Grep(./**)",
-                # Bash permission granted here, but actual commands are validated
-                # by the bash_security_hook (see security.py for allowed commands)
-                "Bash(*)",
+                # NOTE: Direct Bash is BLOCKED - all commands go through E2B sandbox
+                # The bash_security_hook blocks all Bash tool usage and redirects to E2B
+                # Allow E2B MCP tools for sandboxed command execution (CRITICAL)
+                *E2B_TOOLS,
                 # Allow Playwright MCP tools for browser automation and testing
                 *PLAYWRIGHT_TOOLS,
                 # Allow Context7 MCP tools for documentation lookup
@@ -184,6 +238,8 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
                 *SEQUENTIAL_THINKING_TOOLS,
                 # Allow Fetch MCP tools for web content retrieval
                 *FETCH_TOOLS,
+                # Allow Linear MCP tools for project management
+                *LINEAR_TOOLS,
             ],
         },
     }
@@ -197,10 +253,11 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
         json.dump(security_settings, f, indent=2)
 
     print(f"Created security settings at {settings_file}")
-    print("   - Sandbox enabled (OS-level bash isolation)")
+    print("   - E2B SANDBOX ENFORCED - all bash commands run in cloud sandbox")
     print(f"   - Filesystem restricted to: {project_dir.resolve()}")
-    print("   - Bash commands restricted to allowlist (see security.py)")
-    print("   - MCP servers (8 total):")
+    print("   - Direct Bash tool BLOCKED (redirects to E2B)")
+    print("   - MCP servers (10 total):")
+    print("     • e2b (CRITICAL - sandboxed command execution)")
     print("     • playwright (browser automation and testing)")
     print("     • context7 (documentation lookup)")
     print("     • filesystem (file operations)")
@@ -209,6 +266,7 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
     print("     • memory (knowledge graph-based memory)")
     print("     • sequential-thinking (dynamic problem-solving)")
     print("     • fetch (web content retrieval)")
+    print("     • linear (project management and issue tracking)")
     print()
 
     # Get Context7 API key from environment
@@ -222,8 +280,20 @@ def create_client(project_dir: Path, model: str) -> ClaudeSDKClient:
             model=model,
             system_prompt="""You are an expert full-stack developer building production-quality applications with an advanced AI development platform.
 
+IMPORTANT SECURITY REQUIREMENT:
+All shell/bash commands MUST be executed through the E2B sandbox for security.
+DO NOT use the Bash tool directly - it will be blocked.
+Instead, use these E2B tools for command execution:
+  - mcp__e2b__e2b_execute_command: Execute shell commands safely in sandbox
+  - mcp__e2b__e2b_list_files: List directory contents in sandbox
+  - mcp__e2b__e2b_read_file: Read file contents from sandbox
+  - mcp__e2b__e2b_write_file: Write file contents in sandbox
+  - mcp__e2b__e2b_run_tests: Run test suites in sandbox
+
 You have access to:
+- E2B sandbox for secure command execution (REQUIRED for all bash commands)
 - Local checklist system for task tracking
+- Linear for project management and issue tracking
 - Playwright for browser automation and testing
 - Context7 for documentation lookup and best practices
 - Filesystem operations for file management
@@ -236,6 +306,7 @@ You have access to:
 Use these tools strategically to build high-quality software efficiently.""",
             allowed_tools=[
                 *BUILTIN_TOOLS,
+                *E2B_TOOLS,  # CRITICAL: Sandboxed command execution
                 *PLAYWRIGHT_TOOLS,
                 *CONTEXT7_TOOLS,
                 *FILESYSTEM_TOOLS,
@@ -244,8 +315,16 @@ Use these tools strategically to build high-quality software efficiently.""",
                 *MEMORY_TOOLS,
                 *SEQUENTIAL_THINKING_TOOLS,
                 *FETCH_TOOLS,
+                *LINEAR_TOOLS,  # Project management and issue tracking
             ],
             mcp_servers={
+                # E2B MCP server for sandboxed command execution (CRITICAL SECURITY)
+                # This is the ONLY safe way to run bash commands - prevents host system compromise
+                "e2b": {
+                    "command": "python",
+                    "args": [str(Path(__file__).parent / "mcp_servers" / "e2b" / "e2b_mcp_server.py")],
+                    "env": {"E2B_API_KEY": e2b_api_key}
+                },
                 # Playwright MCP server for browser automation
                 # See: https://playwright.dev/docs/intro
                 "playwright": {
@@ -295,6 +374,16 @@ Use these tools strategically to build high-quality software efficiently.""",
                 "fetch": {
                     "command": "npx",
                     "args": ["-y", "@modelcontextprotocol/server-fetch"]
+                },
+                # Linear MCP server for project management
+                # Uses Streamable HTTP transport (recommended over SSE)
+                # See: https://linear.app/docs/mcp
+                "linear": {
+                    "type": "http",
+                    "url": "https://mcp.linear.app/mcp",
+                    "headers": {
+                        "Authorization": f"Bearer {linear_api_key}"
+                    }
                 },
             },
             hooks={

@@ -3,11 +3,14 @@ Progress Tracking Utilities
 ===========================
 
 Functions for tracking and displaying progress of the autonomous coding agent.
-Progress is tracked via local checklist system (.project_checklist.json).
+Progress is tracked via local checklist system (.project_checklist.json) and
+optionally via Linear project management (.linear_project.json).
 """
 
+import json
 from pathlib import Path
 from checklist_manager import ChecklistManager, CHECKLIST_FILE
+from linear_config import LINEAR_PROJECT_MARKER
 
 
 def is_checklist_initialized(project_dir: Path) -> bool:
@@ -52,9 +55,9 @@ def print_progress_summary(project_dir: Path) -> None:
 
     print(f"\nProject Checklist Status:")
     print(f"  Total tasks: {total_tasks}")
-    print(f"  ✓ Done: {summary['Done']}")
-    print(f"  ⚙ In Progress: {summary['In Progress']}")
-    print(f"  ☐ Todo: {summary['Todo']}")
+    print(f"  [x] Done: {summary['Done']}")
+    print(f"  [-] In Progress: {summary['In Progress']}")
+    print(f"  [ ] Todo: {summary['Todo']}")
 
     # Show next task if available
     next_task = manager.get_next_task()
@@ -86,10 +89,10 @@ def print_checklist_table(project_dir: Path) -> None:
     for task in tasks:
         task_id = f"#{task['id']}"
         status_emoji = {
-            'Done': '✓',
-            'In Progress': '⚙',
-            'Todo': '☐'
-        }.get(task['status'], '?')
+            'Done': '[x]',
+            'In Progress': '[-]',
+            'Todo': '[ ]'
+        }.get(task['status'], '[?]')
         status = f"{status_emoji} {task['status']}"
         title = task['title'][:58] + "..." if len(task['title']) > 58 else task['title']
         notes_count = len(task['notes'])
@@ -99,3 +102,66 @@ def print_checklist_table(project_dir: Path) -> None:
 
     print("-" * 100)
     print()
+
+
+# =============================================================================
+# Linear Project State Functions
+# =============================================================================
+
+def load_linear_project_state(project_dir: Path) -> dict | None:
+    """
+    Load the Linear project state from the marker file.
+
+    Args:
+        project_dir: Directory containing .linear_project.json
+
+    Returns:
+        Project state dict or None if not initialized
+    """
+    marker_file = project_dir / LINEAR_PROJECT_MARKER
+
+    if not marker_file.exists():
+        return None
+
+    try:
+        with open(marker_file, "r") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return None
+
+
+def is_linear_initialized(project_dir: Path) -> bool:
+    """
+    Check if Linear project has been initialized.
+
+    Args:
+        project_dir: Directory to check
+
+    Returns:
+        True if .linear_project.json exists and is valid
+    """
+    state = load_linear_project_state(project_dir)
+    return state is not None and state.get("initialized", False)
+
+
+def print_linear_progress_summary(project_dir: Path) -> None:
+    """
+    Print a summary of current Linear project status.
+
+    Since actual progress is tracked in Linear, this reads the local
+    state file for cached information. The agent updates Linear directly
+    and reports progress in session comments.
+    """
+    state = load_linear_project_state(project_dir)
+
+    if state is None:
+        print("\nLinear Progress: Project not yet initialized")
+        return
+
+    total = state.get("total_issues", 0)
+    meta_issue = state.get("meta_issue_id", "unknown")
+
+    print(f"\nLinear Project Status:")
+    print(f"  Total issues created: {total}")
+    print(f"  META issue ID: {meta_issue}")
+    print(f"  (Check Linear for current Done/In Progress/Todo counts)")

@@ -25,6 +25,7 @@ import asyncio
 import json
 import logging
 import os
+import shlex
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -249,9 +250,11 @@ class E2BMCPServer:
             path = args.get("path", "/")
             recursive = args.get("recursive", False)
 
-            command = f"ls -la {path}"
+            # SECURITY: Escape path to prevent shell injection
+            escaped_path = shlex.quote(path)
+            command = f"ls -la {escaped_path}"
             if recursive:
-                command = f"find {path} -type f"
+                command = f"find {escaped_path} -type f"
 
             result = await self.sandbox_manager.execute_command(command)
 
@@ -268,8 +271,9 @@ class E2BMCPServer:
         """Read file from sandbox."""
         try:
             file_path = args["file_path"]
+            # SECURITY: Escape path to prevent shell injection
             result = await self.sandbox_manager.execute_command(
-                command=f"cat {file_path}"
+                command=f"cat {shlex.quote(file_path)}"
             )
 
             return {
@@ -291,8 +295,9 @@ class E2BMCPServer:
             # Escape content for shell
             escaped_content = content.replace("'", "'\"'\"'")
 
+            # SECURITY: Escape path to prevent shell injection
             result = await self.sandbox_manager.execute_command(
-                command=f"echo '{escaped_content}' > {file_path}"
+                command=f"echo '{escaped_content}' > {shlex.quote(file_path)}"
             )
 
             return {

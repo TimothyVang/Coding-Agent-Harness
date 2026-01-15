@@ -1,6 +1,6 @@
 # Agent Orchestrator Configuration
 # =================================
-# Complete configuration for the Linear Coding Agent Harness
+# Complete configuration for the Coding Agent Harness
 
 orchestrator:
   # Maximum number of concurrent agents

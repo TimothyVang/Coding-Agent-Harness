@@ -39,8 +39,8 @@ class ProjectRegistry:
             registry_path: Path to registry file (defaults to .agent_army/projects.json)
         """
         if registry_path is None:
-            # Default to .agent_army directory in current working directory
-            registry_dir = Path.cwd() / ".agent_army"
+            # Default to .agent_army directory in Coding-Agent-Harness
+            registry_dir = Path(__file__).parent.parent / ".agent_army"
             registry_dir.mkdir(parents=True, exist_ok=True)
             self.registry_path = registry_dir / "projects.json"
         else:

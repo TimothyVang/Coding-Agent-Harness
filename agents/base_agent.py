@@ -14,6 +14,7 @@ Features:
 """
 
 import asyncio
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Optional
@@ -80,6 +81,15 @@ class BaseAgent:
 
         # Task start time
         self._task_start_time = None
+
+    def print_status(self, message: str):
+        """
+        Print status message with agent ID prefix.
+
+        Args:
+            message: Status message to print
+        """
+        print(f"[{self.agent_id}] {message}")
 
     async def initialize(self):
         """
@@ -562,8 +572,8 @@ Learn from your experiences and continuously improve your performance.
                         analysis["framework"] = "nextjs"
                     elif "express" in deps:
                         analysis["framework"] = "express"
-                except:
-                    pass
+                except (json.JSONDecodeError, KeyError) as e:
+                    print(f"[{self.agent_id}] Warning: Error parsing package.json: {e}")
 
             elif (project_path / "requirements.txt").exists() or (project_path / "pyproject.toml").exists():
                 analysis["language"] = "python"
@@ -601,8 +611,8 @@ Learn from your experiences and continuously improve your performance.
                         content = file_path.read_text(encoding='utf-8', errors='ignore')
                         lines = [line.strip() for line in content.split('\n') if line.strip()]
                         total_lines += len(lines)
-                    except:
-                        pass
+                    except (IOError, OSError, UnicodeDecodeError) as e:
+                        print(f"[{self.agent_id}] Warning: Error reading {file_path}: {e}")
 
             analysis["file_count"] = file_count
             analysis["lines_of_code"] = total_lines

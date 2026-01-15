@@ -11,13 +11,22 @@ Features:
 - Self-improvement goals
 - Knowledge base management
 - Cross-agent feedback integration
+- Vector embeddings for semantic similarity search
 """
 
 import json
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
+
+# Import embedding support (optional)
+try:
+    from .embeddings import EmbeddingManager, EmbeddingStorage, EMBEDDINGS_AVAILABLE
+except ImportError:
+    EMBEDDINGS_AVAILABLE = False
+    EmbeddingManager = None
+    EmbeddingStorage = None
 
 
 class AgentMemory:
@@ -33,18 +42,24 @@ class AgentMemory:
     - Feedback from other agents
     """
 
-    def __init__(self, agent_id: str, memory_dir: Optional[Path] = None):
+    def __init__(
+        self,
+        agent_id: str,
+        memory_dir: Optional[Path] = None,
+        use_embeddings: bool = True
+    ):
         """
         Initialize agent memory.
 
         Args:
             agent_id: Unique agent identifier
             memory_dir: Optional memory directory (defaults to AGENT_MEMORY/)
+            use_embeddings: Whether to use vector embeddings for similarity search
         """
         self.agent_id = agent_id
 
         if memory_dir is None:
-            memory_dir = Path.cwd() / "AGENT_MEMORY" / agent_id
+            memory_dir = Path(__file__).parent.parent / "AGENT_MEMORY" / agent_id
         else:
             memory_dir = Path(memory_dir) / agent_id
 
@@ -56,6 +71,14 @@ class AgentMemory:
         self.patterns_file = self.memory_dir / "learned_patterns.md"
         self.mistakes_file = self.memory_dir / "mistakes.md"
         self.knowledge_file = self.memory_dir / "knowledge_base.md"
+
+        # Initialize embedding support (lazy loaded)
+        self.use_embeddings = use_embeddings and EMBEDDINGS_AVAILABLE
+        self._embedding_manager = None
+        self._embedding_storage = None
+        self._pattern_embeddings = None
+        self._pattern_metadata = None
+        self._embeddings_dirty = False
 
         self.data = self._load_or_create()
 
@@ -332,6 +355,7 @@ class AgentMemory:
         }
 
         self.data["patterns"].append(pattern)
+        self._embeddings_dirty = True  # Mark for re-embedding
         self.save()
 
     def add_mistake(
@@ -433,11 +457,125 @@ class AgentMemory:
         self.data["recent_context"].update(kwargs)
         self.save()
 
-    def find_similar_patterns(self, query: str) -> List[Dict]:
+    @property
+    def embedding_manager(self):
+        """Lazy load embedding manager."""
+        if self._embedding_manager is None and self.use_embeddings:
+            self._embedding_manager = EmbeddingManager()
+        return self._embedding_manager
+
+    @property
+    def embedding_storage(self):
+        """Lazy load embedding storage."""
+        if self._embedding_storage is None and self.use_embeddings:
+            self._embedding_storage = EmbeddingStorage(self.memory_dir)
+        return self._embedding_storage
+
+    def _load_pattern_embeddings(self):
+        """Load pattern embeddings from disk."""
+        if not self.use_embeddings or self.embedding_storage is None:
+            return
+
+        embeddings, metadata = self.embedding_storage.load("patterns")
+        if embeddings is not None:
+            self._pattern_embeddings = embeddings
+            self._pattern_metadata = metadata
+        else:
+            self._pattern_embeddings = None
+            self._pattern_metadata = []
+
+    def _sync_pattern_embeddings(self):
+        """Rebuild pattern embeddings from current patterns."""
+        if not self.use_embeddings or self.embedding_manager is None:
+            return
+
+        if not self.data["patterns"]:
+            self._pattern_embeddings = None
+            self._pattern_metadata = []
+            return
+
+        # Create texts to embed
+        texts = []
+        metadata = []
+        for i, pattern in enumerate(self.data["patterns"]):
+            text = f"{pattern['title']}. {pattern.get('description', '')}"
+            texts.append(text)
+            metadata.append({
+                "index": i,
+                "title": pattern["title"],
+                "success_rate": pattern.get("success_rate", 100),
+                "use_count": pattern.get("use_count", 1)
+            })
+
+        # Generate embeddings
+        embeddings = self.embedding_manager.encode(texts)
+        if embeddings is not None:
+            self._pattern_embeddings = embeddings
+            self._pattern_metadata = metadata
+
+            # Save to disk
+            self.embedding_storage.save(
+                "patterns",
+                embeddings,
+                metadata,
+                self.embedding_manager.model_name
+            )
+
+        self._embeddings_dirty = False
+
+    def find_similar_patterns(
+        self,
+        query: str,
+        top_k: int = 5,
+        threshold: float = 0.3
+    ) -> List[Dict]:
         """
         Find patterns similar to a query.
 
-        Simple keyword matching - can be enhanced with embeddings.
+        Uses vector embeddings if available, falls back to keyword matching.
+
+        Args:
+            query: Query string to search for
+            top_k: Maximum number of results
+            threshold: Minimum similarity score for embeddings (0-1)
+
+        Returns:
+            List of matching pattern dicts with similarity scores
+        """
+        # Try embedding-based search first
+        if self.use_embeddings and self.embedding_manager and self.embedding_manager.available:
+            # Load or rebuild embeddings if needed
+            if self._pattern_embeddings is None:
+                self._load_pattern_embeddings()
+
+            if self._pattern_embeddings is None or self._embeddings_dirty:
+                self._sync_pattern_embeddings()
+
+            if self._pattern_embeddings is not None and len(self._pattern_embeddings) > 0:
+                results = self.embedding_manager.similarity_search(
+                    query,
+                    self._pattern_embeddings,
+                    self._pattern_metadata,
+                    top_k=top_k,
+                    threshold=threshold
+                )
+
+                # Map back to full pattern data
+                matches = []
+                for idx, score, meta in results:
+                    if idx < len(self.data["patterns"]):
+                        pattern = self.data["patterns"][idx].copy()
+                        pattern["similarity_score"] = score
+                        matches.append(pattern)
+
+                return matches
+
+        # Fallback to keyword matching
+        return self._keyword_search_patterns(query)
+
+    def _keyword_search_patterns(self, query: str) -> List[Dict]:
+        """
+        Keyword-based pattern search (fallback).
 
         Args:
             query: Query string to search for
@@ -446,39 +584,109 @@ class AgentMemory:
             List of matching pattern dicts
         """
         query_lower = query.lower()
+        query_words = set(query_lower.split())
         matches = []
 
         for pattern in self.data["patterns"]:
-            if (query_lower in pattern["title"].lower() or
-                query_lower in pattern.get("description", "").lower()):
-                matches.append(pattern)
+            title_lower = pattern["title"].lower()
+            desc_lower = pattern.get("description", "").lower()
+
+            # Check for word overlap
+            pattern_words = set(title_lower.split()) | set(desc_lower.split())
+            overlap = query_words & pattern_words
+
+            if overlap or query_lower in title_lower or query_lower in desc_lower:
+                pattern_copy = pattern.copy()
+                # Estimate similarity based on word overlap
+                pattern_copy["similarity_score"] = len(overlap) / max(len(query_words), 1)
+                matches.append(pattern_copy)
 
         # Sort by success rate and use count
         matches.sort(
-            key=lambda p: (p.get("success_rate", 0), p.get("use_count", 0)),
+            key=lambda p: (p.get("similarity_score", 0), p.get("success_rate", 0)),
             reverse=True
         )
 
         return matches
 
-    def get_relevant_mistakes(self, context: str) -> List[Dict]:
+    def get_relevant_mistakes(
+        self,
+        context: str,
+        top_k: int = 5,
+        threshold: float = 0.3
+    ) -> List[Dict]:
         """
         Get mistakes relevant to current context.
 
+        Uses vector embeddings if available, falls back to keyword matching.
+
         Args:
             context: Context string (task description, etc.)
+            top_k: Maximum number of results
+            threshold: Minimum similarity score for embeddings (0-1)
+
+        Returns:
+            List of relevant mistake dicts with similarity scores
+        """
+        # Try embedding-based search
+        if self.use_embeddings and self.embedding_manager and self.embedding_manager.available:
+            if self.data["mistakes"]:
+                # Build mistake embeddings on-the-fly (smaller dataset)
+                texts = []
+                for mistake in self.data["mistakes"]:
+                    text = f"{mistake['title']}. {mistake.get('error', '')}"
+                    texts.append(text)
+
+                embeddings = self.embedding_manager.encode(texts)
+                if embeddings is not None:
+                    metadata = [{"index": i} for i in range(len(texts))]
+                    results = self.embedding_manager.similarity_search(
+                        context,
+                        embeddings,
+                        metadata,
+                        top_k=top_k,
+                        threshold=threshold
+                    )
+
+                    mistakes = []
+                    for idx, score, _ in results:
+                        if idx < len(self.data["mistakes"]):
+                            mistake = self.data["mistakes"][idx].copy()
+                            mistake["similarity_score"] = score
+                            mistakes.append(mistake)
+
+                    return mistakes
+
+        # Fallback to keyword matching
+        return self._keyword_search_mistakes(context)
+
+    def _keyword_search_mistakes(self, context: str) -> List[Dict]:
+        """
+        Keyword-based mistake search (fallback).
+
+        Args:
+            context: Context string to search for
 
         Returns:
             List of relevant mistake dicts
         """
         context_lower = context.lower()
+        context_words = set(context_lower.split())
         relevant = []
 
         for mistake in self.data["mistakes"]:
-            if (context_lower in mistake["title"].lower() or
-                context_lower in mistake.get("error", "").lower()):
-                relevant.append(mistake)
+            title_lower = mistake["title"].lower()
+            error_lower = mistake.get("error", "").lower()
 
+            mistake_words = set(title_lower.split()) | set(error_lower.split())
+            overlap = context_words & mistake_words
+
+            if overlap or context_lower in title_lower or context_lower in error_lower:
+                mistake_copy = mistake.copy()
+                mistake_copy["similarity_score"] = len(overlap) / max(len(context_words), 1)
+                relevant.append(mistake_copy)
+
+        relevant.sort(key=lambda m: m.get("similarity_score", 0), reverse=True)
         return relevant
 
     def get_strengths(self) -> List[str]:

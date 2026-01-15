@@ -2,7 +2,7 @@
 Checklist Manager
 =================
 
-Local task tracking system to replace Linear integration.
+Local task tracking system for project tasks and progress.
 Maintains a JSON-based checklist for project tasks and progress.
 """
 
@@ -19,6 +19,10 @@ CHECKLIST_FILE = ".project_checklist.json"
 STATUS_TODO = "Todo"
 STATUS_IN_PROGRESS = "In Progress"
 STATUS_DONE = "Done"
+STATUS_BLOCKED = "Blocked"
+
+# Valid status values
+VALID_STATUSES = {STATUS_TODO, STATUS_IN_PROGRESS, STATUS_DONE, STATUS_BLOCKED}
 
 
 class ChecklistManager:
@@ -100,9 +104,15 @@ class ChecklistManager:
 
         Args:
             task_id: Task ID
-            status: New status (Todo, In Progress, Done)
+            status: New status (Todo, In Progress, Done, Blocked)
             note: Optional note to add
+
+        Raises:
+            ValueError: If status is not a valid status value
         """
+        if status not in VALID_STATUSES:
+            raise ValueError(f"Invalid status '{status}'. Must be one of: {VALID_STATUSES}")
+
         task = self.get_task_by_id(task_id)
         if task:
             task["status"] = status

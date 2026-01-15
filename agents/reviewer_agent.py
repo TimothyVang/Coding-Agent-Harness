@@ -141,7 +141,7 @@ class ReviewerAgent(BaseAgent):
             }
 
             # Step 1: Load patterns from memory
-            self.memory.load_patterns()
+            self.memory.load()
 
             # Step 2: Load files to review
             files_info = await self._load_task_code(project_path, task_details)

@@ -9,6 +9,10 @@ Run with: python test_security.py
 
 import asyncio
 import sys
+from pathlib import Path
+
+# Add parent directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from security import (
     bash_security_hook,
@@ -22,7 +26,7 @@ def test_hook(command: str, should_block: bool) -> bool:
     """Test a single command against the security hook."""
     input_data = {"tool_name": "Bash", "tool_input": {"command": command}}
     result = asyncio.run(bash_security_hook(input_data))
-    was_blocked = result.get("decision") == "block"
+    was_blocked = result.get("block") == True
 
     if was_blocked == should_block:
         status = "PASS"
