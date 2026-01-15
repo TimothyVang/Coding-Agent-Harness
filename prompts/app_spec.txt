@@ -1,118 +1,40 @@
-=== RUST-DFIR SPECIFICATION ===
+=== APPLICATION SPECIFICATION TEMPLATE ===
+
+Instructions: Replace this template with your actual project specification.
+The multi-agent system will read this file and generate tasks automatically.
+
+============================================================
 
 ## PROJECT OVERVIEW
 
-**Name:** Rust-DFIR Toolkit
-**Goal:** Build a next-generation digital forensics and incident response tool that surpasses FTK Imager and KAPE
-**Language:** Rust (Edition 2021)
-**Target Platform:** Windows XP SP3 through Windows 11 (single 32-bit static binary <15MB)
-**Development Timeline:** 16-20 weeks to production MVP
-**Status:** Planning phase (0% implementation complete)
+**Name:** [Your Project Name]
+**Goal:** [Brief description of what you're building - 1-2 sentences]
+**Language:** [Primary programming language/framework]
+**Target Platform:** [Where the application runs - Windows, Linux, Web, Mobile, etc.]
+**Status:** Planning phase
 
 ### Primary Objectives
 
-1. Build a forensically sound disk imaging tool **faster than FTK Imager**
-2. Implement rapid triage capabilities **comparable to KAPE**
-3. Add unique capabilities: network streaming, AI-assisted analysis
-4. Support Windows 7 through Windows 11 with single binary (XP SP3 support in Phase 5)
-5. Maintain forensic integrity with complete chain of custody
+1. [First major objective]
+2. [Second major objective]
+3. [Third major objective]
 
 ### Success Metrics
 
-| Metric | Target | Validation Method |
-|--------|--------|-------------------|
-| Disk Imaging Speed | >200 MB/s (NVMe SSD) | cargo bench + real-world test |
-| Triage Performance | Top 20 artifacts in <5 minutes | Integration test on 1TB drive |
-| Network Streaming | >500 Mbps over gigabit LAN | Network bandwidth test |
-| Binary Size | <15MB static executable | cargo build --release + size check |
-| Hash Verification | 100% match with FTK Imager | Compare MD5/SHA1/SHA256 exactly |
-| Windows Compatibility | XP SP3 - Win 11 | Test on all OS VMs |
-| Zero Warnings | All clippy checks pass | cargo clippy -- -D warnings |
-| Test Coverage | >80% for core modules | cargo tarpaulin or coverage tool |
+| Metric | Target | How to Validate |
+|--------|--------|-----------------|
+| [Metric 1] | [Target value] | [Test method] |
+| [Metric 2] | [Target value] | [Test method] |
 
 ---
 
 ## CORE PRINCIPLES
 
-The following principles from the Rust-DFIR Constitution are **NON-NEGOTIABLE** and must guide every implementation decision:
+List the non-negotiable principles that guide development:
 
-### I. Forensic Soundness (NON-NEGOTIABLE)
-
-**Every operation MUST preserve the integrity of evidence and maintain an unbroken chain of custody.**
-
-- **Zero Write Guarantee**: The tool MUST NEVER modify the source drive. All disk access MUST use read-only flags (GENERIC_READ, O_RDONLY). Software write-blocking verification MUST execute before acquisition.
-- **Hash Verification**: Multi-algorithm streaming hashes (MD5, SHA1, SHA256) MUST be calculated concurrently during acquisition. Final hashes MUST match reference tools (FTK Imager, dcfldd) exactly.
-- **Chain of Custody**: Every operation MUST log: examiner identity, timestamps (ISO 8601), source/destination identifiers, hash values, and any errors. Logs MUST be tamper-evident (structured JSON with optional digital signatures).
-- **Bad Sector Handling**: Read errors MUST be handled gracefully: zero-fill the buffer, log the sector offset, continue acquisition. Image size MUST match source size exactly.
-- **No Silent Failures**: All errors MUST be logged and reported. Partial failures MUST be distinguishable from successful completion.
-
-**Rationale**: Court admissibility requires absolute forensic integrity. A single unexplained byte difference invalidates evidence.
-
-### II. Performance Over Convenience
-
-**The tool MUST saturate hardware limits, not software limits.**
-
-- **Direct I/O**: Use FILE_FLAG_NO_BUFFERING (Windows) or O_DIRECT (Linux) to bypass OS caching. Buffers MUST be sector-aligned (512 or 4096 bytes) using manual memory allocation.
-- **Multi-threaded Pipeline**: Implement producer-consumer architecture with ring buffers. Reader, hasher, compressor, and writer threads MUST run concurrently. Target: >200 MB/s on NVMe SSDs.
-- **Zero-Copy Parsing**: Parse artifacts (MFT, Registry, Event Logs) in-memory. NEVER copy files unless explicitly required for output.
-- **Bounded Memory**: Ring buffers MUST be bounded (16-64MB total) to prevent memory exhaustion. Backpressure MUST throttle fast producers.
-
-**Rationale**: Incident responders work under time pressure. A 10-hour acquisition vs. 2-hour acquisition can be operationally decisive.
-
-### III. Universal Compatibility (Windows-First)
-
-**Single binary MUST run on Windows XP SP3 through Windows 11/Server 2025 without modification.**
-
-- **Static Linking**: All dependencies MUST be statically linked. NO runtime DLLs except kernel32.dll/ntdll.dll. Binary MUST be portable (drop and run).
-- **32-bit Target**: Use i686-pc-windows-msvc target to ensure compatibility with legacy 32-bit systems and 64-bit systems.
-- **API Thunking**: Modern APIs unavailable on XP MUST use runtime detection and fallback implementations (via windows-sys crate or manual thunking).
-- **Graceful Degradation**: Features requiring modern APIs (e.g., advanced compression) MUST degrade gracefully with clear user messaging.
-
-**Rationale**: Legacy systems are common in industrial control, healthcare, and government sectors. Requiring modern OS limits operational utility.
-
-### IV. Security by Design
-
-**The tool itself MUST NOT introduce vulnerabilities or attack surface.**
-
-- **Memory Safety**: Leverage Rust's ownership system. Use `unsafe` ONLY where necessary (Win32 FFI, aligned allocation). Document ALL `unsafe` blocks with safety contracts.
-- **Input Validation**: Parsing corrupted file systems, malformed MFT entries, or malicious binaries MUST NOT crash the tool. Use defensive parsing with bounds checks.
-- **Minimize Attack Surface**: NO network listeners in default mode. Network streaming (if enabled) MUST use TLS 1.3 with certificate validation.
-- **Audit Trail**: Sensitive operations (VSS snapshot creation, registry access) MUST be logged with sufficient detail for incident response post-mortem.
-
-**Rationale**: Forensic tools run on compromised systems. The tool becoming a vulnerability is unacceptable.
-
-### V. Test-Driven Development (NON-NEGOTIABLE)
-
-**All core functionality MUST have tests written BEFORE implementation. Tests MUST fail before code is written.**
-
-- **Proof of Concepts First**: High-risk components (raw disk I/O, VSS, threading) MUST be validated in standalone POCs before integration.
-- **Unit Tests**: All parsers, hash algorithms, and data structures MUST have unit tests with known-good inputs/outputs.
-- **Integration Tests**: End-to-end workflows (image USB drive, triage artifacts, network streaming) MUST have automated integration tests.
-- **Validation Against Reference Tools**: Hashes MUST be compared against FTK Imager and dcfldd. If hashes mismatch, STOP and debug before proceeding.
-
-**Rationale**: Forensic tools cannot be debugged in production. A failed acquisition loses evidence permanently.
-
-### VI. Incremental Delivery & Phased Development
-
-**Build in phases with working deliverables at each phase. Each phase MUST be validated before proceeding.**
-
-- **Phase 0 (POCs)**: Validate technical risks (disk I/O, threading, VSS) in isolation. ALL POCs MUST compile and demonstrate core capability.
-- **Phase 1 (MVP)**: Deliver basic disk imager with hashing and chain of custody. MUST match FTK Imager functionality subset.
-- **Subsequent Phases**: Add triage, network streaming, AI analysis, legacy support, production hardening in sequence.
-- **No Phase Skipping**: Each phase MUST meet all success criteria before moving to next. No "we'll fix it later" technical debt.
-
-**Rationale**: Complex systems fail when too much is built before validation. Phased approach limits risk and ensures working tool at each milestone.
-
-### VII. Simplicity & Explainability
-
-**Every design decision MUST be justifiable. Complexity MUST be earned, not assumed.**
-
-- **No Premature Abstraction**: Implement directly first. Refactor into abstractions ONLY when patterns emerge across 3+ use cases.
-- **No Frameworks Without Cause**: Use standard library and minimal dependencies. Each external crate MUST justify its inclusion.
-- **Readable Code**: Forensic practitioners MUST be able to audit the source code. Avoid clever tricks; prefer clarity.
-- **Document "Why"**: Comments MUST explain rationale, not mechanics. Example: "// Use NO_BUFFERING to bypass OS cache for forensic integrity" vs. "// Open file"
-
-**Rationale**: Forensic tools may be challenged in court. Explainable, auditable code withstands scrutiny better than "black box" complexity.
+1. **[Principle 1]**: [Description]
+2. **[Principle 2]**: [Description]
+3. **[Principle 3]**: [Description]
 
 ---
 
@@ -121,1330 +43,131 @@ The following principles from the Rust-DFIR Constitution are **NON-NEGOTIABLE** 
 ### System Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Rust-DFIR Architecture                    │
-├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌───────────┐    ┌──────────────┐    ┌─────────────┐      │
-│  │ CLI Layer │───>│ Coordinator  │───>│ Chain of    │      │
-│  │ (clap)    │    │              │    │ Custody Log │      │
-│  └───────────┘    └──────┬───────┘    └─────────────┘      │
-│                           │                                  │
-│                           v                                  │
-│  ┌────────────────────────────────────────────────────┐    │
-│  │          Multi-threaded Pipeline Engine            │    │
-│  ├────────────────────────────────────────────────────┤    │
-│  │                                                      │    │
-│  │  Reader Thread  ──>  Ring Buffer  ──>  Writer      │    │
-│  │       │                   │                          │    │
-│  │       │                   └──>  Hasher Thread       │    │
-│  │       │                   └──>  Compressor (opt)    │    │
-│  │       v                                              │    │
-│  │  Disk I/O Layer                                      │    │
-│  │  ├─ Sector-aligned buffers                          │    │
-│  │  ├─ Bad sector handling                             │    │
-│  │  └─ Direct I/O (FILE_FLAG_NO_BUFFERING)            │    │
-│  └────────────────────────────────────────────────────┘    │
-│                           │                                  │
-│                           v                                  │
-│  ┌────────────────────────────────────────────────────┐    │
-│  │            Data Sources & Outputs                   │    │
-│  ├────────────────────────────────────────────────────┤    │
-│  │ Sources:                    Outputs:                │    │
-│  │ • Physical Drives           • Raw .dd images        │    │
-│  │ • VSS Snapshots             • E01 (future)          │    │
-│  │ • MFT Parser                • JSON artifacts        │    │
-│  │ • Network streams           • Network stream        │    │
-│  └────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
+[Draw or describe your system architecture]
+
+Example:
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│   Client    │────>│   Server    │────>│  Database   │
+└─────────────┘     └─────────────┘     └─────────────┘
 ```
 
 ### Core Components
 
-**1. Disk I/O Layer (src/disk/)**
-- Purpose: Raw access to physical drives with forensic integrity
-- Files: sector_align.rs, reader.rs, writer.rs
-- Technologies: windows-sys crate, manual memory alignment, OVERLAPPED I/O
+1. **[Component 1]**
+   - Purpose: [What it does]
+   - Files: [Where the code lives]
+   - Technologies: [Frameworks/libraries used]
 
-**2. Pipeline Engine (src/pipeline/)**
-- Purpose: Multi-threaded processing for maximum throughput
-- Files: ring_buffer.rs, worker.rs, coordinator.rs
-- Technologies: crossbeam-channel, rayon, backpressure management
-
-**3. Forensic Integrity (src/forensics/)**
-- Purpose: Chain of custody and evidence integrity
-- Files: custody.rs, integrity.rs, logging.rs
-- Technologies: sha2/md-5/sha1 crates, serde_json, chrono
-
-**4. Triage System (src/triage/)**
-- Purpose: Rapid artifact collection (KAPE-like functionality)
-- Files: mft_resolver.rs, vss.rs, config.rs, artifacts.rs
-- Technologies: mft crate, COM interfaces for VSS, serde_yaml
-
-**5. Network Streaming (src/network/)** - Phase 3
-- Purpose: Remote forensic collection over network
-- Files: server.rs, client.rs, compressor.rs
-- Technologies: tonic (gRPC), zstd, tokio-rustls (TLS)
-
-**6. AI Analysis (src/ai/)** - Phase 4
-- Purpose: Automatic artifact triage and deobfuscation
-- Files: sanitizer.rs, prompts.rs, analyzer.rs
-- Technologies: reqwest (HTTP client), regex
+2. **[Component 2]**
+   - Purpose: [What it does]
+   - Files: [Where the code lives]
+   - Technologies: [Frameworks/libraries used]
 
 ---
 
-## CARGO WORKSPACE STRUCTURE
+## PROJECT STRUCTURE
 
 ```
-rust-dfir/
-├── Cargo.toml                    # Workspace root
-├── Cargo.lock                    # Locked dependencies
-├── .gitignore
-├── init.sh                       # Development environment setup
-├── README.md
-├── dfir_spec.txt                 # This specification (copied by harness)
-├── .linear_project.json          # Created by initializer agent
-│
-├── crates/
-│   ├── core/                     # Library crate (all core logic)
-│   │   ├── Cargo.toml
-│   │   ├── src/
-│   │   │   ├── lib.rs
-│   │   │   ├── error.rs
-│   │   │   ├── disk/
-│   │   │   │   ├── mod.rs
-│   │   │   │   ├── sector_align.rs
-│   │   │   │   ├── reader.rs
-│   │   │   │   └── writer.rs
-│   │   │   ├── pipeline/
-│   │   │   │   ├── mod.rs
-│   │   │   │   ├── ring_buffer.rs
-│   │   │   │   ├── worker.rs
-│   │   │   │   └── coordinator.rs
-│   │   │   ├── integrity/
-│   │   │   │   ├── mod.rs
-│   │   │   │   └── hasher.rs
-│   │   │   ├── forensics/
-│   │   │   │   ├── mod.rs
-│   │   │   │   ├── custody.rs
-│   │   │   │   ├── integrity.rs
-│   │   │   │   └── logging.rs
-│   │   │   ├── triage/         # Phase 2
-│   │   │   │   ├── mod.rs
-│   │   │   │   ├── mft_resolver.rs
-│   │   │   │   ├── vss.rs
-│   │   │   │   └── config.rs
-│   │   │   ├── network/        # Phase 3
-│   │   │   │   ├── mod.rs
-│   │   │   │   ├── server.rs
-│   │   │   │   ├── client.rs
-│   │   │   │   └── compressor.rs
-│   │   │   └── ai/             # Phase 4
-│   │   │       ├── mod.rs
-│   │   │       ├── sanitizer.rs
-│   │   │       ├── prompts.rs
-│   │   │       └── analyzer.rs
-│   │   └── tests/              # Unit tests (per-module)
-│   │
-│   ├── cli/                      # Binary: CLI tool
-│   │   ├── Cargo.toml
-│   │   └── src/
-│   │       ├── main.rs
-│   │       └── cli.rs
-│   │
-│   ├── tui/                      # Binary: Terminal GUI (ratatui)
-│   │   ├── Cargo.toml
-│   │   └── src/
-│   │       ├── main.rs
-│   │       ├── app.rs
-│   │       ├── ui.rs
-│   │       └── events.rs
-│   │
-│   └── web-gui/                  # Binary: Web GUI (Tauri or Axum)
-│       ├── Cargo.toml
-│       └── src/
-│           └── main.rs
-│
-├── examples/                     # POC binaries (Phase 0)
-│   ├── poc_raw_disk.rs
-│   ├── poc_ring_buffer.rs
-│   └── poc_vss.rs
-│
-├── tests/                        # Integration tests
-│   ├── integration/
-│   │   ├── disk_imaging.rs
-│   │   ├── hash_validation.rs
-│   │   ├── triage_workflow.rs
-│   │   └── network_streaming.rs
-│   └── fixtures/                 # Test data
-│       ├── test_disk.img
-│       └── reference_hashes.json
-│
-├── configs/                      # Triage YAML configs (Phase 2)
-│   └── targets/
-│       ├── windows-registry.yaml
-│       ├── event-logs.yaml
-│       └── browser-artifacts.yaml
-│
-├── proto/                        # gRPC definitions (Phase 3)
-│   └── forensics.proto
-│
-└── target/                       # Build artifacts (gitignored)
+your-project/
+├── src/
+│   ├── main.[ext]
+│   └── [modules]/
+├── tests/
+├── docs/
+├── config/
+└── [other directories]
 ```
 
 ---
 
-## DEVELOPMENT PHASES (60-75 TASKS)
+## DEVELOPMENT PHASES
 
-### Phase 0: Proof of Concepts (3 tasks - Weeks 1-2)
+### Phase 0: Setup & Proof of Concepts
 
-**Goal:** Validate core technical risks before full implementation
+**Goal:** Validate technical approach and set up project foundation
 
-#### Task 3.1: POC - Raw Disk Access
+- [ ] Task 0.1: Initialize project structure
+- [ ] Task 0.2: Set up development environment
+- [ ] Task 0.3: [POC task if needed]
 
-**Category:** core | **Priority:** 1 (Urgent)
+### Phase 1: Core Features (MVP)
 
-**Description:**
-Prove we can read raw disk sectors with aligned buffers using Windows API (CreateFileW with FILE_FLAG_NO_BUFFERING). This validates the most critical technical risk before building the full tool.
+**Goal:** Build minimum viable product with core functionality
 
-**Implementation Steps:**
-1. Add dependencies to Cargo.toml:
-   - windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_IO"] }
-2. Create examples/poc_raw_disk.rs
-3. Implement to_wide() function for Windows UTF-16 string conversion
-4. Implement open_physical_drive() using CreateFileW with NO_BUFFERING flag
-5. Implement AlignedBuffer struct using std::alloc::{alloc, dealloc, Layout}
-6. Implement read_sectors() using ReadFile with OVERLAPPED structure
-7. Add main() to read 1MB from PhysicalDrive0 and display hex dump
+- [ ] Task 1.1: [Core feature 1]
+- [ ] Task 1.2: [Core feature 2]
+- [ ] Task 1.3: [Core feature 3]
+- [ ] Task 1.4: Create unit tests
+- [ ] Task 1.5: Validate MVP functionality
 
-**Testing Steps:**
-1. Compile: cargo build --example poc_raw_disk
-2. Run as Administrator: cargo run --example poc_raw_disk
-3. Verify: Displays hex dump of first 1MB from drive
-4. Verify: No errors, clean shutdown
+### Phase 2: Extended Features
 
-**Forensic Validation:**
-- [ ] Read-only access confirmed (GENERIC_READ flag)
-- [ ] Alignment verified (buffer address % 512 == 0)
-- [ ] Error handling comprehensive (no panics on failure)
+**Goal:** Add additional features and improve UX
 
-**Acceptance Criteria:**
-- [ ] Compiles with zero warnings (cargo clippy -- -D warnings)
-- [ ] Runs successfully on Windows 10/11
-- [ ] Displays hex dump of drive data
-- [ ] Handles errors gracefully (e.g., permission denied)
-- [ ] Committed to git: "Phase 0 Task 3.1: POC raw disk access"
+- [ ] Task 2.1: [Extended feature 1]
+- [ ] Task 2.2: [Extended feature 2]
+- [ ] Task 2.3: Create integration tests
+
+### Phase 3: Polish & Release
+
+**Goal:** Production-ready release
+
+- [ ] Task 3.1: Write documentation
+- [ ] Task 3.2: Performance optimization
+- [ ] Task 3.3: Security review
+- [ ] Task 3.4: Create release v1.0.0
 
 ---
 
-#### Task 3.2: POC - Ring Buffer Threading
-
-**Category:** core | **Priority:** 1 (Urgent)
-
-**Description:**
-Prove multi-threaded producer-consumer pattern with bounded ring buffer works efficiently without deadlocks. This validates the pipeline architecture design.
-
-**Implementation Steps:**
-1. Add dependencies to Cargo.toml:
-   - crossbeam-channel = "0.5"
-   - rayon = "1.7"
-2. Create examples/poc_ring_buffer.rs
-3. Implement bounded channel with capacity (16 slots)
-4. Create producer thread that sends data chunks
-5. Create consumer thread that receives and processes chunks
-6. Implement backpressure demonstration (producer waits when buffer full)
-7. Add performance measurement (throughput calculation)
-
-**Testing Steps:**
-1. Compile: cargo build --example poc_ring_buffer
-2. Run: cargo run --example poc_ring_buffer
-3. Verify: Producer and consumer run concurrently
-4. Verify: Backpressure activates when buffer fills
-5. Verify: No deadlocks, clean shutdown
-
-**Forensic Validation:**
-- [ ] All sent data received (no data loss)
-- [ ] Ordering preserved (FIFO)
-- [ ] Memory bounded (doesn't grow infinitely)
-
-**Acceptance Criteria:**
-- [ ] Compiles with zero warnings
-- [ ] Demonstrates producer-consumer pattern
-- [ ] Shows backpressure working correctly
-- [ ] Throughput measurement displayed
-- [ ] Committed to git: "Phase 0 Task 3.2: POC ring buffer threading"
-
----
-
-#### Task 3.3: POC - Volume Shadow Copy
-
-**Category:** core | **Priority:** 1 (Urgent)
-
-**Description:**
-Prove we can create VSS snapshots programmatically using COM APIs (IVssBackupComponents) to access locked files without calling vssadmin.exe. This is critical for triage functionality.
-
-**Implementation Steps:**
-1. Add dependencies to Cargo.toml:
-   - windows-sys with VSS features: ["Win32_Storage_Vss", "Win32_System_Com"]
-2. Create examples/poc_vss.rs
-3. Implement COM initialization (CoInitialize)
-4. Create IVssBackupComponents instance
-5. Initialize backup with VSS_BT_FULL
-6. Add volume to snapshot set
-7. Call PrepareForBackup, DoSnapshotSet
-8. Query snapshot properties to get device object path
-9. Open file from snapshot
-10. Clean up: delete snapshot, release COM objects
-
-**Testing Steps:**
-1. Compile: cargo build --example poc_vss
-2. Run as Administrator: cargo run --example poc_vss
-3. Verify: VSS snapshot created successfully
-4. Verify: Can read locked Registry file (e.g., C:\Windows\System32\config\SAM)
-5. Verify: Snapshot deleted after completion
-6. Check: No VSS artifacts left in vssadmin list shadows
-
-**Forensic Validation:**
-- [ ] No permanent VSS snapshots created (cleaned up)
-- [ ] Can read locked system files
-- [ ] Error handling comprehensive (COM cleanup on failure)
-
-**Acceptance Criteria:**
-- [ ] Compiles with zero warnings
-- [ ] Creates and deletes VSS snapshot programmatically
-- [ ] Successfully reads locked file
-- [ ] No memory leaks (COM objects released)
-- [ ] Committed to git: "Phase 0 Task 3.3: POC VSS programmatic access"
-
----
-
-### Phase 1: MVP - Basic Imager (12-15 tasks - Weeks 3-6)
-
-**Goal:** Production-quality disk imager with multi-threaded pipeline
-
-#### Task 4.1: Project Structure Setup
-
-**Category:** core | **Priority:** 1
-
-**Description:**
-Set up Cargo workspace with proper crate organization for library and binaries.
-
-**Implementation Steps:**
-1. Create workspace Cargo.toml at project root
-2. Create crates/ directory with subdirectories: core, cli, tui, web-gui
-3. Initialize each crate: cargo new --lib core, cargo new --bin cli, etc.
-4. Configure workspace dependencies in root Cargo.toml
-5. Set up .gitignore for Rust (target/, *.pdb, *.exe)
-6. Create examples/, tests/integration/, tests/fixtures/ directories
-7. Add workspace profile settings (release optimization, strip symbols)
-
-**Testing Steps:**
-1. Build workspace: cargo build
-2. Verify all crates compile
-3. Run workspace tests: cargo test
-4. Check binary sizes: ls -lh target/release/
-
-**Acceptance Criteria:**
-- [ ] Workspace structure matches specification
-- [ ] cargo build succeeds for all crates
-- [ ] cargo test runs (even if no tests yet)
-- [ ] Committed to git: "Phase 1 Task 4.1: Workspace setup"
-
----
-
-#### Task 4.2: Implement src/error.rs
-
-**Category:** core | **Priority:** 1
-
-**Description:**
-Define comprehensive error types using thiserror crate for all forensic operations.
-
-**Implementation Steps:**
-1. Add dependency to crates/core/Cargo.toml: thiserror = "1.0"
-2. Create crates/core/src/error.rs
-3. Define ForensicError enum with variants:
-   - DiskAccessError(String) - Disk I/O failures
-   - AlignmentError - Buffer alignment issues
-   - HashMismatchError - Hash verification failures
-   - VssError(String) - Volume Shadow Copy failures
-   - IoError(std::io::Error) - General I/O errors
-4. Implement Display and Error traits using thiserror macros
-5. Add Result<T> type alias: pub type Result<T> = std::result::Result<T, ForensicError>
-6. Write unit tests for error creation and formatting
-
-**Testing Steps:**
-1. Compile: cargo test --lib error
-2. Verify all error variants construct correctly
-3. Check error messages are descriptive
-
-**Acceptance Criteria:**
-- [ ] Compiles with zero warnings
-- [ ] All error types have clear messages
-- [ ] Tests pass
-- [ ] Committed to git: "Phase 1 Task 4.2: Error types"
-
----
-
-#### Task 4.3: Implement src/disk/sector_align.rs
-
-**Category:** core | **Priority:** 1
-
-**Description:**
-Implement sector-aligned buffer allocation for FILE_FLAG_NO_BUFFERING compliance.
-
-**Implementation Steps:**
-1. Create crates/core/src/disk/mod.rs and sector_align.rs
-2. Port AlignedBuffer from POC with improvements:
-   - Add Debug impl
-   - Add as_ptr() and as_mut_ptr() methods
-   - Implement Send + Sync traits
-3. Add validation: assert alignment is power of 2
-4. Add unit tests:
-   - Test 512-byte alignment
-   - Test 4096-byte alignment
-   - Test various sizes
-5. Add docstrings with safety invariants
-
-**Testing Steps:**
-1. Run: cargo test disk::sector_align
-2. Verify alignment is exact (address % align == 0)
-3. Check memory is released properly (valgrind or similar)
-
-**Forensic Validation:**
-- [ ] Alignment verified mathematically
-- [ ] No memory leaks
-- [ ] Properly implements Drop
-
-**Acceptance Criteria:**
-- [ ] Compiles with zero warnings
-- [ ] All unit tests pass
-- [ ] Alignment verified for 512 and 4096 bytes
-- [ ] Committed to git: "Phase 1 Task 4.3: Sector-aligned buffers"
-
----
-
-#### Task 4.4: Implement src/pipeline/ring_buffer.rs
-
-**Category:** core | **Priority:** 1
-
-**Description:**
-Implement bounded ring buffer using crossbeam-channel for multi-threaded pipeline.
-
-**Implementation Steps:**
-1. Add dependency: crossbeam-channel = "0.5"
-2. Create crates/core/src/pipeline/mod.rs and ring_buffer.rs
-3. Port POC ring buffer with enhancements:
-   - Generic over T: Send
-   - Configurable capacity (default 64MB / chunk_size)
-   - Sender and Receiver handles
-4. Implement RingBuffer::new(capacity: usize) -> (Sender, Receiver)
-5. Add unit tests for send/recv operations
-6. Test backpressure behavior
-
-**Testing Steps:**
-1. Run: cargo test pipeline::ring_buffer
-2. Verify bounded behavior (doesn't grow unbounded)
-3. Test concurrent send/recv from multiple threads
-
-**Acceptance Criteria:**
-- [ ] Compiles with zero warnings
-- [ ] Tests demonstrate backpressure
-- [ ] No deadlocks in concurrent tests
-- [ ] Committed to git: "Phase 1 Task 4.4: Ring buffer"
-
----
-
-#### Task 4.5: Implement src/disk/reader.rs
-
-**Category:** core | **Priority:** 1
-
-**Description:**
-Implement DiskReader for reading physical drives with Windows API.
-
-**Implementation Steps:**
-1. Create crates/core/src/disk/reader.rs
-2. Port POC open_physical_drive() and read_sectors() functions
-3. Create DiskReader struct with fields:
-   - handle: HANDLE
-   - sector_size: u32 (512 or 4096)
-   - total_size: u64
-4. Implement DiskReader::open(drive_number: u32) -> Result<Self>
-5. Implement DiskReader::read_at(&self, buffer: &mut [u8], offset: u64) -> Result<usize>
-6. Implement Drop to close handle
-7. Add error handling for all Windows API calls
-8. Write integration test (requires admin privileges)
-
-**Testing Steps:**
-1. Build: cargo build --lib
-2. Run unit tests: cargo test disk::reader (non-admin tests)
-3. Run integration test: cargo test --test disk_reader -- --ignored (admin required)
-4. Verify reads first 1MB from test drive
-
-**Forensic Validation:**
-- [ ] Read-only access verified (GENERIC_READ)
-- [ ] Error codes logged comprehensively
-- [ ] Handle closed properly on Drop
-
-**Acceptance Criteria:**
-- [ ] Compiles with zero warnings
-- [ ] Unit tests pass
-- [ ] Integration test reads drive successfully
-- [ ] Committed to git: "Phase 1 Task 4.5: Disk reader"
-
----
-
-#### Task 4.6: Implement src/disk/writer.rs
-
-**Category:** core | **Priority:** 1
-
-**Description:**
-Implement ImageWriter for writing .dd format images.
-
-**Implementation Steps:**
-1. Create crates/core/src/disk/writer.rs
-2. Create ImageWriter struct with field: file: File
-3. Implement ImageWriter::create(path: &Path) -> Result<Self>
-4. Implement ImageWriter::write(&mut self, buffer: &[u8]) -> Result<usize>
-5. Implement Drop to ensure file is flushed and closed
-6. Add validation: ensure write succeeds or returns error
-7. Write unit tests with temporary files
-
-**Testing Steps:**
-1. Run: cargo test disk::writer
-2. Create test file, write data, verify size
-3. Test error handling (read-only filesystem, disk full, etc.)
-
-**Forensic Validation:**
-- [ ] All writes verified (no silent failures)
-- [ ] File properly closed on Drop
-- [ ] Disk full errors handled gracefully
-
-**Acceptance Criteria:**
-- [ ] Compiles with zero warnings
-- [ ] Tests pass
-- [ ] Error handling comprehensive
-- [ ] Committed to git: "Phase 1 Task 4.6: Image writer"
-
----
-
-#### Task 4.7: Implement src/integrity/hasher.rs
-
-**Category:** core | **Priority:** 1
-
-**Description:**
-Implement multi-algorithm streaming hash calculator (MD5, SHA1, SHA256).
-
-**Implementation Steps:**
-1. Add dependencies:
-   - sha2 = "0.10"
-   - md-5 = "0.10"
-   - sha1 = "0.10"
-2. Create crates/core/src/integrity/mod.rs and hasher.rs
-3. Create MultiHasher struct containing:
-   - md5: Md5
-   - sha1: Sha1
-   - sha256: Sha256
-4. Implement MultiHasher::new() -> Self
-5. Implement MultiHasher::update(&mut self, data: &[u8])
-6. Implement MultiHasher::finalize(self) -> HashResult with MD5/SHA1/SHA256 as hex strings
-7. Write unit tests with known test vectors (e.g., empty string, "abc", etc.)
-
-**Testing Steps:**
-1. Run: cargo test integrity::hasher
-2. Verify hashes match NIST test vectors
-3. Test streaming (multiple update() calls = single update())
-
-**Forensic Validation:**
-- [ ] Hashes verified against NIST test vectors
-- [ ] Streaming behavior correct (no state corruption)
-
-**Acceptance Criteria:**
-- [ ] Compiles with zero warnings
-- [ ] All test vectors pass
-- [ ] Hex encoding correct (lowercase)
-- [ ] Committed to git: "Phase 1 Task 4.7: Multi-hasher"
-
----
-
-#### Task 4.8: Implement src/pipeline/worker.rs
-
-**Category:** core | **Priority:** 1
-
-**Description:**
-Implement worker thread functions for reader, hasher, and writer.
-
-**Implementation Steps:**
-1. Create crates/core/src/pipeline/worker.rs
-2. Implement reader_worker(disk: DiskReader, sender: Sender<Vec<u8>>) -> Result<()>
-   - Loop: read chunk, send to ring buffer
-   - Handle backpressure automatically (channel blocks)
-3. Implement hasher_worker(receiver: Receiver<Vec<u8>>, hasher: &mut MultiHasher, sender: Sender<Vec<u8>>) -> Result<()>
-   - Loop: receive chunk, update hash, forward to writer
-4. Implement writer_worker(receiver: Receiver<Vec<u8>>, writer: ImageWriter) -> Result<()>
-   - Loop: receive chunk, write to disk
-5. Add error propagation to all workers
-6. Write integration test coordinating all 3 workers
-
-**Testing Steps:**
-1. Run: cargo test pipeline::worker
-2. Verify data flows through all workers
-3. Check hash is computed correctly
-4. Verify image file written matches source
-
-**Acceptance Criteria:**
-- [ ] Compiles with zero warnings
-- [ ] Integration test passes
-- [ ] No data loss through pipeline
-- [ ] Committed to git: "Phase 1 Task 4.8: Pipeline workers"
-
----
-
-#### Task 4.9: Implement src/pipeline/coordinator.rs
-
-**Category:** core | **Priority:** 1
-
-**Description:**
-Implement AcquisitionCoordinator to orchestrate reader/hasher/writer threads.
-
-**Implementation Steps:**
-1. Create crates/core/src/pipeline/coordinator.rs
-2. Create AcquisitionCoordinator struct with configuration:
-   - source_drive: u32
-   - output_path: PathBuf
-   - ring_buffer_capacity: usize
-   - chunk_size: usize
-3. Implement AcquisitionCoordinator::new(...) -> Self
-4. Implement AcquisitionCoordinator::run(&self) -> Result<ChainOfCustody>
-   - Spawn 3 threads (reader, hasher, writer)
-   - Join threads and collect results
-   - Handle thread panics
-5. Add progress tracking (bytes processed)
-6. Add performance metrics (throughput calculation)
-7. Write end-to-end integration test
-
-**Testing Steps:**
-1. Run: cargo test pipeline::coordinator
-2. Test on small test file (100MB)
-3. Verify hash matches dcfldd output
-4. Measure throughput (should be >100 MB/s)
-
-**Forensic Validation:**
-- [ ] Hash verified against reference tool (dcfldd)
-- [ ] Image size matches source exactly
-- [ ] No data corruption
-
-**Acceptance Criteria:**
-- [ ] Compiles with zero warnings
-- [ ] Integration test passes
-- [ ] Hash matches reference
-- [ ] Throughput >100 MB/s on test system
-- [ ] Committed to git: "Phase 1 Task 4.9: Coordinator"
-
----
-
-#### Task 4.10: Implement src/forensics/custody.rs
-
-**Category:** core | **Priority:** 2
-
-**Description:**
-Implement chain of custody data structures and JSON serialization.
-
-**Implementation Steps:**
-1. Add dependency: serde = { version = "1.0", features = ["derive"] }, serde_json = "1.0", chrono = "0.4"
-2. Create crates/core/src/forensics/mod.rs and custody.rs
-3. Define ChainOfCustody struct with fields:
-   - examiner: String
-   - case_number: Option<String>
-   - source_device: String
-   - output_path: String
-   - acquisition_started: DateTime<Utc>
-   - acquisition_completed: DateTime<Utc>
-   - source_size_bytes: u64
-   - image_size_bytes: u64
-   - md5_hash: String
-   - sha1_hash: String
-   - sha256_hash: String
-   - errors: Vec<String>
-4. Implement Serialize, Deserialize derives
-5. Implement ChainOfCustody::to_json(&self) -> Result<String>
-6. Implement ChainOfCustody::save_to_file(&self, path: &Path) -> Result<()>
-7. Write unit tests for JSON serialization
-
-**Testing Steps:**
-1. Run: cargo test forensics::custody
-2. Verify JSON output is valid and complete
-3. Test round-trip: serialize -> deserialize
-
-**Acceptance Criteria:**
-- [ ] Compiles with zero warnings
-- [ ] JSON format is human-readable
-- [ ] All required fields present
-- [ ] Committed to git: "Phase 1 Task 4.10: Chain of custody"
-
----
-
-#### Task 4.11: Implement src/cli.rs
-
-**Category:** cli | **Priority:** 2
-
-**Description:**
-Implement CLI argument parsing using clap.
-
-**Implementation Steps:**
-1. Add dependency to crates/cli/Cargo.toml: clap = { version = "4.4", features = ["derive"] }
-2. Create crates/cli/src/cli.rs
-3. Define Args struct with clap derives:
-   - source: u32 (drive number)
-   - output: PathBuf (output image path)
-   - examiner: String (examiner name)
-   - case_number: Option<String>
-   - chunk_size: Option<usize> (default 1MB)
-4. Implement Args::parse() using clap parser
-5. Add help text and examples
-6. Write unit tests for argument parsing
-
-**Testing Steps:**
-1. Build: cargo build --bin rust-dfir
-2. Run: cargo run --bin rust-dfir -- --help
-3. Verify help text displays correctly
-4. Test various argument combinations
-
-**Acceptance Criteria:**
-- [ ] Compiles with zero warnings
-- [ ] Help text clear and complete
-- [ ] Required args validated
-- [ ] Committed to git: "Phase 1 Task 4.11: CLI arguments"
-
----
-
-#### Task 4.12: Implement src/main.rs
-
-**Category:** cli | **Priority:** 2
-
-**Description:**
-Implement main entry point that ties together coordinator and CLI.
-
-**Implementation Steps:**
-1. Edit crates/cli/src/main.rs
-2. Parse CLI arguments
-3. Create AcquisitionCoordinator with CLI args
-4. Run coordinator
-5. Save chain of custody JSON
-6. Display summary to user
-7. Add error handling and exit codes
-8. Add progress indicators using indicatif crate
-
-**Testing Steps:**
-1. Build release: cargo build --release
-2. Run on test USB drive: sudo ./target/release/rust-dfir --source 1 --output test.dd --examiner "Test User"
-3. Verify image created
-4. Check chain of custody JSON
-5. Compare hashes with FTK Imager
-
-**Forensic Validation:**
-- [ ] Hash comparison with FTK Imager PASSES
-- [ ] Image size matches source exactly
-- [ ] Chain of custody JSON complete
-
-**Acceptance Criteria:**
-- [ ] Compiles with zero warnings
-- [ ] Binary <10MB (cargo build --release)
-- [ ] Creates working disk image
-- [ ] Hashes match FTK Imager
-- [ ] Committed to git: "Phase 1 Task 4.12: Main program"
-
----
-
-#### Task 4.13: Integration Testing (USB Drive Imaging)
-
-**Category:** testing | **Priority:** 2
-
-**Description:**
-Create comprehensive integration test for end-to-end disk imaging workflow.
-
-**Implementation Steps:**
-1. Create tests/integration/disk_imaging.rs
-2. Set up: Create small test disk image (100MB) in tests/fixtures/
-3. Test steps:
-   - Image test disk to temporary output
-   - Verify hash matches
-   - Verify size matches
-   - Verify chain of custody created
-4. Add #[ignore] attribute (requires admin/test disk)
-5. Document setup instructions in tests/integration/README.md
-
-**Testing Steps:**
-1. Create test fixture: dd if=/dev/urandom of=tests/fixtures/test_disk.img bs=1M count=100
-2. Run: cargo test --test disk_imaging -- --ignored
-3. Verify all assertions pass
-
-**Acceptance Criteria:**
-- [ ] Test creates image successfully
-- [ ] Hash verification passes
-- [ ] Chain of custody validated
-- [ ] Committed to git: "Phase 1 Task 4.13: Integration tests"
-
----
-
-#### Task 4.14: Performance Validation (>200 MB/s)
-
-**Category:** testing | **Priority:** 2
-
-**Description:**
-Create benchmark suite and validate >200 MB/s throughput target.
-
-**Implementation Steps:**
-1. Add dev-dependency: criterion = { version = "0.5", features = ["html_reports"] }
-2. Create benches/throughput.rs
-3. Implement benchmarks:
-   - Disk read throughput
-   - Hash computation throughput
-   - Image write throughput
-   - End-to-end pipeline throughput
-4. Add [[bench]] section to Cargo.toml
-5. Run benchmarks and document results
-
-**Testing Steps:**
-1. Run: cargo bench
-2. Check HTML report in target/criterion/
-3. Verify throughput meets targets:
-   - Disk read: >200 MB/s
-   - Hash: >500 MB/s
-   - Write: >300 MB/s
-   - Pipeline: >200 MB/s
-
-**Acceptance Criteria:**
-- [ ] Benchmarks run successfully
-- [ ] Disk imaging achieves >200 MB/s on NVMe SSD
-- [ ] Results documented
-- [ ] Committed to git: "Phase 1 Task 4.14: Performance benchmarks"
-
----
-
-#### Task 4.15: Hash Validation vs FTK Imager
-
-**Category:** testing | **Priority:** 1 (Critical Gate)
-
-**Description:**
-Create validation test comparing hashes with FTK Imager. **PHASE GATE: Must pass before Phase 2.**
-
-**Implementation Steps:**
-1. Create tests/integration/hash_validation.rs
-2. Document manual setup:
-   - Create test disk (100MB)
-   - Image with Rust-DFIR
-   - Image with FTK Imager
-   - Save FTK hashes to tests/fixtures/ftk_hashes.json
-3. Implement test:
-   - Read both JSON files
-   - Compare MD5, SHA1, SHA256
-   - Assert exact match
-4. Add #[ignore] attribute (requires manual FTK run)
-5. Document in tests/integration/README.md
-
-**Testing Steps:**
-1. Manual: Image test disk with FTK Imager
-2. Manual: Image same disk with Rust-DFIR
-3. Run: cargo test --test hash_validation -- --ignored
-4. Verify: ALL hashes match exactly
-
-**Forensic Validation:**
-- [ ] MD5 match: EXACT
-- [ ] SHA1 match: EXACT
-- [ ] SHA256 match: EXACT
-- [ ] Image size match: EXACT
-
-**Acceptance Criteria:**
-- [ ] Test framework implemented
-- [ ] Hashes match FTK Imager 100%
-- [ ] Any mismatch is CRITICAL BUG
-- [ ] Phase 1 GATE: Cannot proceed to Phase 2 without hash match
-- [ ] Committed to git: "Phase 1 Task 4.15: FTK hash validation"
-
----
-
-### Phase 2: Targeted Triage (8-10 tasks - Weeks 7-10)
-
-**Goal:** KAPE-style rapid artifact collection
-
-**NOTE:** Phase 2 tasks are documented in TECHNICAL_PLAN.md lines 1400-1800. For brevity in this specification, the full task breakdown for Phases 2-6 follows the same structure as Phase 0-1 above. Key tasks include:
-
-#### Phase 2 Key Tasks:
-- Task 5.1: Add Triage Dependencies (mft, evtx, nt-hive2)
-- Task 5.2: Implement MFT Parser (crates/core/src/triage/mft_resolver.rs)
-- Task 5.3: Implement VSS Integration (crates/core/src/triage/vss.rs)
-- Task 5.4: Implement Registry Parser (crates/core/src/parsers/registry.rs)
-- Task 5.5: Implement Event Log Parser (crates/core/src/parsers/evtx.rs)
-- Task 5.6: Implement YAML Config System (crates/core/src/triage/config.rs)
-- Task 5.7-5.8: Create Target Configs (windows-registry.yaml, event-logs.yaml)
-- Task 5.9: Integration Testing (Triage workflow)
-- Task 5.10: Performance Validation (<5 min for top 20 artifacts)
-
-**Success Criteria:**
-- Parse 1TB drive's MFT in <30 seconds
-- Extract Registry via VSS in <2 minutes
-- Collect top 20 artifacts in <5 minutes
-- KAPE config compatibility
-
----
-
-### Phase 3: Network Streaming (6-8 tasks - Weeks 11-13)
-
-**Goal:** Remote forensic collection over network
-
-#### Phase 3 Key Tasks:
-- Task 6.1: Add Network Dependencies (tonic, prost, tokio, zstd, tokio-rustls)
-- Task 6.2: Create gRPC Protocol Definition (proto/forensics.proto)
-- Task 6.3: Implement Compression (crates/core/src/network/compressor.rs)
-- Task 6.4: Implement gRPC Server (crates/core/src/network/server.rs)
-- Task 6.5: Implement gRPC Client (crates/core/src/network/client.rs)
-- Task 6.6: Add TLS Certificate Support
-- Task 6.7: Integration Testing (Network streaming workflow)
-- Task 6.8: Performance Validation (>500 Mbps)
-
-**Success Criteria:**
-- Stream over LAN at >500 Mbps
-- Compression reduces bandwidth by 50%+
-- Encrypted transport verified
-- Resume after disconnect works
-
----
-
-### Phase 4: AI-Assisted Analysis (5-7 tasks - Weeks 14-16)
-
-**Goal:** Automatic artifact triage and deobfuscation
-
-#### Phase 4 Key Tasks:
-- Task 7.1: Add AI Dependencies (reqwest, regex)
-- Task 7.2: Implement PII Sanitization (crates/core/src/ai/sanitizer.rs)
-- Task 7.3: Implement System Prompts (crates/core/src/ai/prompts.rs)
-- Task 7.4: Implement LLM Integration (crates/core/src/ai/analyzer.rs)
-- Task 7.5: Integration Testing (PowerShell deobfuscation)
-- Task 7.6: Integration Testing (Event log analysis)
-- Task 7.7: Validation (PII sanitization)
-
-**Success Criteria:**
-- Deobfuscate Base64 PowerShell
-- Identify suspicious Event Log patterns
-- Analysis completes <10 seconds per artifact
-- All PII redacted before external API calls
-
----
-
-### Phase 5: Legacy Windows Support (4-6 tasks - Weeks 17-18)
-
-**Goal:** Single binary for Windows XP through Windows 11
-
-#### Phase 5 Key Tasks:
-- Task 8.1: Configure .cargo/config.toml (i686-pc-windows-msvc target)
-- Task 8.2: Implement API Detection (crates/core/src/compat/win_api.rs)
-- Task 8.3: Adjust Concurrency for XP (no tokio runtime)
-- Task 8.4: Test on Windows XP SP3 VM
-- Task 8.5: Test on Windows 7/10/11 VMs
-- Task 8.6: Verify Single Binary (<15MB)
-
-**Success Criteria:**
-- Binary runs on XP SP3, Win7, Win11
-- No DLL dependencies
-- Graceful feature degradation
-- Binary size <15MB
-
----
-
-### Phase 6: Production Hardening (8-10 tasks - Weeks 19-20)
-
-**Goal:** Court-admissible quality
-
-#### Phase 6 Key Tasks:
-- Task 9.1: Implement Write-Blocking Verification (crates/core/src/forensics/integrity.rs)
-- Task 9.2: Enhance Chain of Custody (digital signatures)
-- Task 9.3: Implement Comprehensive Audit Logging (crates/core/src/forensics/logging.rs)
-- Task 9.4: Write README.md
-- Task 9.5: Write USER_GUIDE.md
-- Task 9.6: Write FORENSIC_METHODOLOGY.md
-- Task 9.7: Full End-to-End Test Suite
-- Task 9.8: Validate Against FTK Imager (hash match - CRITICAL GATE)
-- Task 9.9: Code Review & Security Audit
-- Task 9.10: Create Release v1.0.0
-
-**Success Criteria:**
-- Write-block verification passes
-- Chain of custody meets legal standards
-- All errors logged to audit file
-- Tool validated against FTK Imager (100% hash match)
-
----
-
-## GUI REQUIREMENTS
-
-### Terminal GUI (ratatui) - Phase 2-3
-
-**Target Users:** Power users, CLI forensic analysts
-**Library:** ratatui + crossterm
-**Features:**
-- Real-time progress bars (acquisition progress, throughput)
-- Live throughput metrics (MB/s, ETA)
-- ASCII art dashboard (disk info, hash progress)
-- Scrollable audit log viewer
-- Keyboard controls (q to quit, arrow keys to navigate)
-
-**Binary Name:** rust-dfir-tui
-**Launch:** cargo run --bin rust-dfir-tui
-
-**Implementation Tasks (Phase 2):**
-- Task: Setup TUI crate structure (crates/tui/)
-- Task: Implement basic dashboard layout
-- Task: Wire to core library (display acquisition progress)
-- Task: Add keyboard event handling
-- Task: Integration test (verify TUI launches and displays data)
-
----
-
-### Web GUI (Framework Decision Required) - Phase 2-3
-
-**Target Users:** Broader audience, Windows GUI users
-**Framework Options:**
-- **Option 1: Tauri** (desktop app, Rust + web frontend, smaller binary)
-- **Option 2: Axum + HTMX** (web server, pure Rust, better XP compatibility)
-
-**Decision Point:** Research both options in Phase 1-2, choose before Phase 3
-
-**Features (both options):**
-- Point-and-click device selector (dropdown of available drives)
-- Drag-drop configuration files
-- Real-time progress display
-- HTML forensic reports
-- Settings management
-
-**Binary Name:** rust-dfir-gui
-**Launch:** cargo run --bin rust-dfir-gui
-
-**Implementation Tasks (Phase 2-3):**
-- Task: Research Tauri vs Axum+HTMX (prototype both)
-- Task: Document decision (binary size, XP compatibility, complexity)
-- Task: Implement chosen framework
-- Task: Create device selector UI
-- Task: Wire to core library
-- Task: Add report generation
-- Task: Integration test
+## DEPENDENCIES
+
+List your project's dependencies:
+
+```toml
+# Example for Rust (Cargo.toml)
+[dependencies]
+serde = "1.0"
+tokio = "1.0"
+
+# Example for Node.js (package.json)
+{
+  "dependencies": {
+    "express": "^4.18.0"
+  }
+}
+
+# Example for Python (requirements.txt)
+flask>=2.0.0
+requests>=2.28.0
+```
 
 ---
 
 ## TESTING STRATEGY
 
-### Unit Tests (Per-Module)
+### Unit Tests
+- Location: `tests/unit/`
+- Coverage target: >80%
 
-**Location:** crates/core/src/**/tests.rs or crates/core/src/**/mod.rs (#[cfg(test)] mod tests)
+### Integration Tests
+- Location: `tests/integration/`
+- Key workflows to test: [list them]
 
-**Coverage:**
-- Error types and conversions
-- Aligned buffer allocation and alignment verification
-- Ring buffer send/recv operations
-- Hash computation against NIST test vectors
-- Chain of custody JSON serialization
-
-**Commands:**
-```bash
-cargo test --lib                    # All library unit tests
-cargo test --lib disk::sector_align # Specific module
-cargo test -- --nocapture          # Show println! output
-```
+### Validation
+- How to verify the application works correctly
+- Comparison with reference tools (if applicable)
 
 ---
 
-### Integration Tests (End-to-End Workflows)
+## NOTES FOR AI AGENTS
 
-**Location:** tests/integration/*.rs
-
-**Key Tests:**
-1. **disk_imaging.rs** - Full disk imaging workflow
-2. **hash_validation.rs** - Compare hashes with FTK Imager (CRITICAL)
-3. **triage_workflow.rs** - Artifact collection end-to-end
-4. **network_streaming.rs** - Client/server streaming
-
-**Commands:**
-```bash
-cargo test --test disk_imaging
-cargo test --test hash_validation -- --ignored  # Requires manual FTK setup
-cargo test --test triage_workflow
-```
-
-**Setup Required (documented in tests/integration/README.md):**
-- Create test disk images in tests/fixtures/
-- Run FTK Imager and save reference hashes
-- Set up test VMs for OS compatibility testing
+- The initializer agent will read this file and create 30-50 discrete tasks
+- Each task should be completable in one coding session
+- Coding agents will claim tasks, implement them, and mark them done
+- Follow the principles and architecture defined above
 
 ---
 
-### Forensic Validation (Manual + Automated)
-
-**Hash Comparison:**
-```bash
-# 1. Image test drive with Rust-DFIR
-cargo run --release -- --source 1 --output test.dd --examiner "Tester"
-
-# 2. Image same drive with FTK Imager (manual step)
-# Save hashes to tests/fixtures/ftk_hashes.json
-
-# 3. Compare hashes
-cargo test --test hash_validation -- --ignored
-
-# Expected: ALL hashes match exactly (MD5, SHA1, SHA256)
-```
-
-**Performance Benchmarks:**
-```bash
-cargo bench                        # All benchmarks
-cargo bench disk_read              # Specific benchmark
-open target/criterion/report/index.html  # View HTML report
-```
-
-**Targets:**
-- Disk read: >200 MB/s (NVMe)
-- Hash computation: >500 MB/s
-- Image write: >300 MB/s
-- End-to-end pipeline: >200 MB/s
-
----
-
-### Clippy Linting (Zero Warnings Policy)
-
-**Command:**
-```bash
-cargo clippy -- -D warnings        # Fail on any warnings
-cargo clippy --all-targets -- -D warnings  # Include tests, benches
-```
-
-**Policy:** ALL warnings must be fixed before commit. No exceptions.
-
----
-
-## FORENSIC CORRECTNESS GATES
-
-Every task completion MUST verify these criteria:
-
-### 1. Zero Write Guarantee
-- [ ] Read-only flags verified (GENERIC_READ, O_RDONLY)
-- [ ] No write operations to source drive
-- [ ] Write-blocking verification test passes (Phase 6)
-
-### 2. Hash Verification
-- [ ] Hashes match reference tools exactly (FTK Imager, dcfldd)
-- [ ] MD5, SHA1, SHA256 all match
-- [ ] Any mismatch is CRITICAL and blocks progression
-
-### 3. Chain of Custody
-- [ ] All metadata logged (examiner, timestamps, hashes)
-- [ ] JSON output complete and valid
-- [ ] Audit trail comprehensive
-
-### 4. Bad Sector Handling
-- [ ] Read errors logged with sector offset
-- [ ] Bad sectors zero-filled (not skipped)
-- [ ] Image size matches source exactly
-
-### 5. Error Logging
-- [ ] Every error captured in audit trail
-- [ ] No silent failures
-- [ ] Error messages descriptive and actionable
-
----
-
-## DEPENDENCIES (by Phase)
-
-### Phase 0 (POCs)
-```toml
-[dependencies]
-windows-sys = { version = "0.59", features = [
-    "Win32_Foundation",
-    "Win32_Storage_FileSystem",
-    "Win32_System_IO",
-    "Win32_Storage_Vss",
-    "Win32_System_Com",
-]}
-crossbeam-channel = "0.5"
-rayon = "1.7"
-```
-
-### Phase 1 (MVP)
-```toml
-# Add to Phase 0:
-thiserror = "1.0"
-sha2 = "0.10"
-md-5 = "0.10"
-sha1 = "0.10"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-chrono = "0.4"
-clap = { version = "4.4", features = ["derive"] }
-indicatif = "0.17"
-
-[dev-dependencies]
-criterion = { version = "0.5", features = ["html_reports"] }
-```
-
-### Phase 2 (Triage)
-```toml
-# Add to Phase 1:
-mft = "0.5"
-evtx = "0.8"
-nt-hive2 = "0.1"
-serde_yaml = "0.9"
-```
-
-### Phase 3 (Network)
-```toml
-# Add to Phase 2:
-tonic = "0.10"
-prost = "0.12"
-tokio = { version = "1.34", features = ["rt-multi-thread", "net"] }
-zstd = "0.13"
-tokio-rustls = "0.25"
-```
-
-### Phase 4 (AI)
-```toml
-# Add to Phase 3:
-reqwest = { version = "0.11", features = ["json"] }
-regex = "1.10"
-```
-
-### GUIs (Phase 2-3)
-```toml
-# Terminal GUI:
-ratatui = "0.25"
-crossterm = "0.27"
-
-# Web GUI (Option 1 - Tauri):
-tauri = { version = "2.0", features = ["api-all"] }
-
-# Web GUI (Option 2 - Axum):
-axum = "0.7"
-askama = "0.12"
-tokio = { version = "1.34", features = ["full"] }
-```
-
----
-
-## SUCCESS METRICS (Final Validation - Phase 6 Gate)
-
-### Performance Targets
-- [X] Disk Imaging: >200 MB/s sustained on NVMe
-- [X] Triage: Top 20 artifacts in <5 minutes (1TB drive)
-- [X] Network Streaming: >500 Mbps over gigabit LAN
-- [X] Binary Size: <15MB static executable
-
-### Forensic Accuracy
-- [X] Hash Accuracy: 100% match vs FTK Imager (MD5, SHA1, SHA256)
-- [X] Chain of Custody: Complete and court-admissible
-- [X] Write-Blocking: Verification test passes
-- [X] Error Handling: Zero silent failures
-
-### Code Quality
-- [X] Compilation: Zero warnings (cargo clippy -- -D warnings)
-- [X] Tests: 100% pass rate (cargo test)
-- [X] Coverage: >80% for core modules
-- [X] Documentation: README, USER_GUIDE, FORENSIC_METHODOLOGY complete
-
-### Compatibility
-- [X] Windows 7-11: All features functional
-- [X] Windows XP SP3: Core features functional with graceful degradation
-- [X] No DLL Dependencies: Portable single binary
-
----
-
-## LINEAR AGENT WORKFLOW
-
-### Initializer Agent (Session 1)
-
-**Tasks:**
-1. Read this dfir_spec.txt
-2. Create Linear project: "Rust-DFIR Toolkit"
-3. Create 60-75 Linear issues (one per task above)
-4. Set priorities: Phase 0 = Priority 1, Phase 1 = Priority 1-2, etc.
-5. Create META issue for session tracking
-6. Copy dfir_spec.txt to project directory
-7. Create init.sh (Rust development environment setup)
-8. Initialize git repository
-9. Create Cargo workspace structure
-10. First commit: "Initial setup: Rust-DFIR project structure"
-
-### Coding Agents (Sessions 2+)
-
-**Workflow per session:**
-1. Query Linear for highest-priority Todo issue
-2. Read issue description and implementation steps
-3. Run verification tests on previously completed features (cargo test)
-4. Claim issue (status → In Progress)
-5. Implement the feature (create files, write code, add tests)
-6. Run clippy: cargo clippy -- -D warnings (fix all warnings)
-7. Run tests: cargo test (ensure all pass)
-8. Run forensic validation if applicable (hash comparison, benchmarks)
-9. Commit to git: "Phase X Task Y.Z: [description]"
-10. Add implementation comment to Linear issue (code changes, testing results)
-11. Mark complete (status → Done)
-12. Update META issue with session summary
-
-**Forensic Gates (CRITICAL):**
-- **Phase 1 → Phase 2 gate:** Hash validation test MUST pass (Task 4.15)
-- **Phase 6 final gate:** Final FTK Imager comparison MUST pass (Task 9.8)
-
-If ANY gate fails, STOP and fix before proceeding.
-
----
-
-## APPENDIX: QUICK REFERENCE
-
-### Build Commands
-```bash
-cargo build                        # Debug build
-cargo build --release              # Optimized build
-cargo build --target i686-pc-windows-msvc  # 32-bit Windows (Phase 5)
-```
-
-### Test Commands
-```bash
-cargo test                         # All tests
-cargo test --lib                   # Unit tests only
-cargo test --test hash_validation  # Specific integration test
-cargo test -- --nocapture          # Show println! output
-cargo test -- --ignored            # Run ignored tests (manual setup required)
-```
-
-### Quality Commands
-```bash
-cargo clippy -- -D warnings        # Lint with zero warnings policy
-cargo fmt                          # Format code
-cargo bench                        # Run benchmarks
-cargo audit                        # Security audit dependencies
-```
-
-### Run Commands
-```bash
-cargo run --bin rust-dfir -- --help                  # CLI help
-cargo run --bin rust-dfir-tui                        # Terminal GUI
-cargo run --bin rust-dfir-gui                        # Web GUI
-cargo run --example poc_raw_disk                     # Run POC
-```
-
-### Forensic Validation
-```bash
-# Compare with FTK Imager
-cargo run --release -- --source 1 --output test.dd --examiner "Tester"
-# Then manually run FTK Imager on same drive
-cargo test --test hash_validation -- --ignored
-
-# Performance benchmark
-cargo bench
-open target/criterion/report/index.html
-```
-
----
-
-**End of Specification**
-
-This specification is the single source of truth for the Rust-DFIR project. All Linear issues, implementation decisions, and validation gates are derived from this document. The autonomous coding agents will use this specification to build a forensically sound, high-performance digital forensics toolkit that surpasses existing commercial tools.
-
-**Version:** 1.0
-**Date:** 2026-01-10
-**Status:** Ready for autonomous implementation
+**Specification Version:** 1.0
+**Last Updated:** [Date]
+**Status:** Ready for implementation

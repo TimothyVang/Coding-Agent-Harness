@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Orchestrator Launcher for Rust-DFIR
-====================================
+Universal Agent Orchestrator
+============================
 
 Launches the multi-agent orchestrator with E2B sandbox protection.
+Configure your project via .env or command-line arguments.
 
 Usage:
     python run_orchestrator.py
@@ -11,9 +12,15 @@ Usage:
 Environment Requirements:
     - E2B_API_KEY in .env (required for sandbox execution)
     - CLAUDE_CODE_OAUTH_TOKEN in .env (required for Claude SDK)
+
+Optional Environment Variables:
+    - PROJECT_NAME: Name of your project (default: "My Project")
+    - PROJECT_PATH: Path to project directory (default: ./projects/default)
+    - SPEC_FILE: Path to specification file (default: ./prompts/app_spec.txt)
 """
 
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -24,18 +31,19 @@ load_dotenv()
 
 
 async def main():
-    """Launch the orchestrator with Rust-DFIR project."""
+    """Launch the orchestrator with configured project."""
     print("\n" + "=" * 60)
-    print("  RUST-DFIR MULTI-AGENT ORCHESTRATOR")
+    print("  UNIVERSAL MULTI-AGENT ORCHESTRATOR")
     print("=" * 60)
 
     # Import after dotenv load
     from orchestrator import AgentOrchestrator
 
-    # Configuration
-    project_name = "Rust-DFIR"
-    project_path = Path(r"C:\Users\newbi\Desktop\PUG Projects\Rust-DFIR")
-    spec_file = Path(__file__).parent / "prompts" / "dfir_spec.txt"
+    # Configuration from environment (with sensible defaults)
+    harness_dir = Path(__file__).parent
+    project_name = os.getenv("PROJECT_NAME", "My Project")
+    project_path = Path(os.getenv("PROJECT_PATH", str(harness_dir / "projects" / "default")))
+    spec_file = Path(os.getenv("SPEC_FILE", str(harness_dir / "prompts" / "app_spec.txt")))
 
     # Validate paths
     if not project_path.exists():

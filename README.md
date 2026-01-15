@@ -99,9 +99,24 @@ ANTHROPIC_API_KEY=your-anthropic-key
 MAX_CONCURRENT_AGENTS=10
 AGENT_TIMEOUT=3600
 DEFAULT_MODEL=claude-opus-4-5-20251101
+
+# Project Configuration (for run_orchestrator.py)
+PROJECT_NAME=My Project
+PROJECT_PATH=./projects/default
+SPEC_FILE=./prompts/app_spec.txt
 ```
 
-### 3. Verify Installation
+### 3. Configure Your Project
+
+1. Edit `prompts/app_spec.txt` with your project specification
+2. Update `.env` with your project settings:
+   - `PROJECT_NAME` - Your project's name
+   - `PROJECT_PATH` - Where to create the project
+   - `SPEC_FILE` - Path to your specification file
+
+Or use the **TUI** (recommended) which lets you configure projects interactively.
+
+### 4. Verify Installation
 
 ```bash
 claude --version
@@ -195,8 +210,7 @@ Coding-Agent-Harness/
 │   └── e2b/
 │       └── e2b_mcp_server.py # E2B sandbox MCP server
 ├── prompts/
-│   ├── app_spec.txt          # Default app specification
-│   ├── dfir_spec.txt         # Rust-DFIR specification
+│   ├── app_spec.txt          # Your application specification (edit this!)
 │   ├── initializer_prompt.md # Checklist creation prompt
 │   └── coding_prompt.md      # Task implementation prompt
 ├── tests/                    # Integration tests
